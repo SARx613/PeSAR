@@ -1,5 +1,5 @@
 /**
- * Vercel Serverless Function — runs on a cron every 15 minutes.
+ * Vercel Serverless Function — triggered every 15 minutes by GitHub Actions.
  *
  * What it does:
  *  1. Fetches the current EUR→ARS Western Union rate from dolarapi.com
@@ -9,10 +9,11 @@
  * Environment variables required in Vercel dashboard:
  *   UPSTASH_REDIS_REST_URL    — from your Upstash Redis database
  *   UPSTASH_REDIS_REST_TOKEN  — from your Upstash Redis database
+ *   CRON_SECRET               — a random secret string (also set in GitHub Secrets)
  *
- * Deploy:
- *   npm i -g vercel
- *   vercel deploy --prod
+ * GitHub Actions secrets required (repo Settings → Secrets → Actions):
+ *   VERCEL_APP_URL  — e.g. https://pesar.vercel.app
+ *   CRON_SECRET     — same value as in Vercel
  */
 
 import { Redis } from '@upstash/redis';
@@ -110,7 +111,17 @@ async function sendSilentPushToAll(rate: number, timestamp: string): Promise<voi
   }
 }
 
-export async function GET(_req: Request): Promise<Response> {
+export async function GET(req: Request): Promise<Response> {
+  // Protect the endpoint with a secret so only the GitHub Action can call it.
+  // Set CRON_SECRET in both Vercel dashboard AND GitHub Actions secrets.
+  const cronSecret = process.env.CRON_SECRET;
+  if (cronSecret) {
+    const authHeader = req.headers.get('Authorization');
+    if (authHeader !== `Bearer ${cronSecret}`) {
+      return Response.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
+    }
+  }
+
   try {
     const { rate, timestamp } = await fetchRate();
 

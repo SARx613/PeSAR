@@ -1,8 +1,7 @@
 {
-  "crons": [
-    {
-      "path": "/api/scrape-rate",
-      "schedule": "*/15 * * * *"
+  "functions": {
+    "api/*.ts": {
+      "maxDuration": 10
     }
-  ]
+  }
 }

@@ -1,0 +1,31 @@
+name: Scrape EUR→ARS Rate
+
+on:
+  schedule:
+    # Every 15 minutes (GitHub Actions minimum is 5 min, free on all plans)
+    - cron: "*/15 * * * *"
+  # Also allows manual trigger from GitHub UI (useful for testing)
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+      - name: Fetch rate & push notifications
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.VERCEL_APP_URL }}/api/scrape-rate")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | head -n-1)
+
+          echo "Response: $BODY"
+          echo "HTTP status: $HTTP_CODE"
+
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Scrape failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
