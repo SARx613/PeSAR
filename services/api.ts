@@ -17,6 +17,16 @@ export interface HistoryResponse {
  * Falls back to the Vercel backend cache if the primary source fails.
  */
 export async function fetchCurrentRate(): Promise<RateResponse> {
+  // 1st try: backend cache (real WU rate scraped every 15 min)
+  if (BACKEND_URL) {
+    try {
+      return await fetchFromBackend();
+    } catch {
+      console.warn('[api] backend unavailable, falling back to dolarapi');
+    }
+  }
+
+  // 2nd try: dolarapi official EUR/ARS rate
   try {
     const res = await fetch(COTIZACIONES_URL, { headers: { Accept: 'application/json' } });
     if (!res.ok) throw new Error(`dolarapi returned ${res.status}`);
@@ -35,9 +45,8 @@ export async function fetchCurrentRate(): Promise<RateResponse> {
       source: 'dolarapi',
       timestamp: eur.fechaActualizacion ?? new Date().toISOString(),
     };
-  } catch (primaryError) {
-    console.warn('[api] primary fetch failed, trying backend cache:', primaryError);
-    return fetchFromBackend();
+  } catch (err) {
+    throw new Error(`All rate sources failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 

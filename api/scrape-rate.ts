@@ -20,18 +20,16 @@ import { Redis } from '@upstash/redis';
 
 const redis = Redis.fromEnv();
 
-// EUR/ARS via dolarapi.com cotizaciones (official bank rate used by Western Union in Argentina)
-const COTIZACIONES_URL = 'https://dolarapi.com/v1/cotizaciones';
-const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
+// Western Union send-money page (SSR Angular — HTML contains the live rate)
+// SendAmount=1.00 EUR → ARS so the exchange rate IS the receive amount
+const WU_URL =
+  'https://www.westernunion.com/fr/fr/web/send-money/start' +
+  '?ReceiveCountry=AR&ISOCurrency=ARS&SendAmount=1.00&FundsOut=AG&FundsIn=CreditCard';
 
-interface CotizacionEntry {
-  moneda: string;
-  casa: string;
-  nombre: string;
-  compra: number;
-  venta: number;
-  fechaActualizacion: string;
-}
+// dolarapi fallback (EUR official bank rate)
+const COTIZACIONES_URL = 'https://dolarapi.com/v1/cotizaciones';
+
+const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 
 interface RatePoint {
   rate: number;
@@ -48,23 +46,71 @@ interface ExpoPushMessage {
   priority?: 'default' | 'normal' | 'high';
 }
 
-async function fetchRate(): Promise<{ rate: number; timestamp: string }> {
+/**
+ * Scrape the Western Union send-money page.
+ * The page is Angular SSR — the exchange rate is in the initial HTML response.
+ * Target element: <span id="exchangeRate">1.00 EUR = 1,733.9148 ARS</span>
+ */
+async function scrapeWURate(): Promise<{ rate: number; timestamp: string }> {
+  const res = await fetch(WU_URL, {
+    headers: {
+      'User-Agent':
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
+        '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'fr-FR,fr;q=0.9,en;q=0.8',
+    },
+  });
+
+  if (!res.ok) throw new Error(`WU returned HTTP ${res.status}`);
+
+  const html = await res.text();
+
+  // Match: id="exchangeRate" ...>1.00 EUR = 1,733.9148 ARS</span>
+  const match = html.match(/id="exchangeRate"[^>]*>\s*([^<]+?)\s*<\/span>/);
+  if (!match) throw new Error('exchangeRate element not found in WU HTML');
+
+  // Parse the ARS value from "1.00 EUR = 1,733.9148 ARS"
+  const rateMatch = match[1].match(/=\s*([\d,]+(?:\.\d+)?)\s*ARS/);
+  if (!rateMatch) throw new Error(`Could not parse rate from: "${match[1]}"`);
+
+  // Remove thousands-separator comma (WU uses 1,733.9148 format)
+  const rate = parseFloat(rateMatch[1].replace(/,/g, ''));
+  if (isNaN(rate) || rate <= 0) throw new Error(`Invalid parsed rate: ${rateMatch[1]}`);
+
+  return { rate: Math.round(rate * 100) / 100, timestamp: new Date().toISOString() };
+}
+
+/**
+ * Fallback: dolarapi.com official EUR/ARS rate.
+ */
+async function fetchDolarApiRate(): Promise<{ rate: number; timestamp: string }> {
   const res = await fetch(COTIZACIONES_URL, { headers: { Accept: 'application/json' } });
-  if (!res.ok) throw new Error(`dolarapi.com/cotizaciones returned ${res.status}`);
+  if (!res.ok) throw new Error(`dolarapi returned ${res.status}`);
 
-  const data = (await res.json()) as CotizacionEntry[];
-
-  // Find the EUR entry (moneda === 'EUR')
+  const data = (await res.json()) as Array<{
+    moneda: string;
+    venta: number;
+    fechaActualizacion?: string;
+  }>;
   const eur = data.find((c) => c.moneda === 'EUR');
-  if (!eur) throw new Error('EUR entry not found in dolarapi cotizaciones');
+  if (!eur) throw new Error('EUR entry not found in dolarapi');
 
-  const rate = parseFloat(String(eur.venta));
-  if (isNaN(rate) || rate <= 0) throw new Error(`Invalid EUR/ARS venta: ${eur.venta}`);
+  const rate = Math.round(parseFloat(String(eur.venta)) * 100) / 100;
+  if (isNaN(rate) || rate <= 0) throw new Error(`Invalid rate: ${eur.venta}`);
 
-  return {
-    rate: Math.round(rate * 100) / 100,
-    timestamp: eur.fechaActualizacion ?? new Date().toISOString(),
-  };
+  return { rate, timestamp: eur.fechaActualizacion ?? new Date().toISOString() };
+}
+
+async function fetchRate(): Promise<{ rate: number; timestamp: string; source: string }> {
+  try {
+    const result = await scrapeWURate();
+    return { ...result, source: 'western_union' };
+  } catch (err) {
+    console.warn('[scrape] WU scraping failed, falling back to dolarapi:', err);
+    const result = await fetchDolarApiRate();
+    return { ...result, source: 'dolarapi_fallback' };
+  }
 }
 
 async function storeRate(rate: number, timestamp: string): Promise<void> {
@@ -124,12 +170,12 @@ export async function GET(req: Request): Promise<Response> {
   }
 
   try {
-    const { rate, timestamp } = await fetchRate();
+    const { rate, timestamp, source } = await fetchRate();
 
     await storeRate(rate, timestamp);
     await sendSilentPushToAll(rate, timestamp);
 
-    return Response.json({ ok: true, rate, timestamp });
+    return Response.json({ ok: true, rate, timestamp, source });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error('[scrape-rate] Error:', message);
