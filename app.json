@@ -18,8 +18,12 @@
       "bundleIdentifier": "com.yourname.pesar",
       "entitlements": {
         "com.apple.security.application-groups": [
+          "group.com.yourname.pesar",
           "group.com.yourname.pesar"
         ]
+      },
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {

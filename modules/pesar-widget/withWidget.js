@@ -1,5 +1,5 @@
 // Compiled-equivalent of withWidget.ts — plain JS for use by Expo config plugin system.
-const { withXcodeProject, withEntitlementsPlist } = require('@expo/config-plugins');
+const { withXcodeProject, withEntitlementsPlist } = require('expo/config-plugins');
 const fs = require('fs');
 const path = require('path');
 

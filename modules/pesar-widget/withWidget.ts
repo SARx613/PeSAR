@@ -4,7 +4,7 @@ import {
   withEntitlementsPlist,
   IOSConfig,
   XcodeProject,
-} from '@expo/config-plugins';
+} from 'expo/config-plugins';
 import * as fs from 'fs';
 import * as path from 'path';
 
