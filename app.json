@@ -48,7 +48,7 @@
         "expo-background-fetch",
         {}
       ],
-      "./modules/pesar-widget/index"
+      "./modules/pesar-widget/index.js"
     ],
     "extra": {
       "eas": {
