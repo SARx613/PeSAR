@@ -17,7 +17,9 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.yourname.pesar",
       "entitlements": {
-        "com.apple.security.application-groups": ["group.com.yourname.pesar"]
+        "com.apple.security.application-groups": [
+          "group.com.yourname.pesar"
+        ]
       }
     },
     "android": {
@@ -27,7 +29,11 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.yourname.pesar"
+      "package": "com.yourname.pesar",
+      "permissions": [
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.WAKE_LOCK"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -51,9 +57,11 @@
       "./modules/pesar-widget/index.js"
     ],
     "extra": {
+      "router": {},
       "eas": {
-        "projectId": "your-eas-project-id"
+        "projectId": "07be7af2-6806-48f3-8b3c-53e28f188401"
       }
-    }
+    },
+    "owner": "sarx613"
   }
 }
