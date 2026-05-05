@@ -52,6 +52,8 @@ interface ExpoPushMessage {
  * Target element: <span id="exchangeRate">1.00 EUR = 1,733.9148 ARS</span>
  */
 async function scrapeWURate(): Promise<{ rate: number; timestamp: string }> {
+  console.log('[WU] Fetching URL:', WU_URL);
+
   const res = await fetch(WU_URL, {
     headers: {
       'User-Agent':
@@ -59,16 +61,42 @@ async function scrapeWURate(): Promise<{ rate: number; timestamp: string }> {
         '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
       Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       'Accept-Language': 'fr-FR,fr;q=0.9,en;q=0.8',
+      'Cache-Control': 'no-cache',
     },
+    redirect: 'follow',
   });
+
+  console.log('[WU] HTTP status:', res.status);
+  console.log('[WU] Final URL (after redirects):', res.url);
+  console.log('[WU] Content-Type:', res.headers.get('content-type'));
 
   if (!res.ok) throw new Error(`WU returned HTTP ${res.status}`);
 
   const html = await res.text();
+  console.log('[WU] HTML length:', html.length, 'chars');
+
+  // Show a snippet around "exchangeRate" if present
+  const idx = html.indexOf('exchangeRate');
+  if (idx === -1) {
+    // No mention at all — log first 2000 chars to see what WU returned
+    console.log('[WU] "exchangeRate" NOT found in HTML.');
+    console.log('[WU] HTML preview (first 2000 chars):', html.slice(0, 2000));
+    console.log('[WU] HTML preview (chars 2000-4000):', html.slice(2000, 4000));
+    throw new Error('exchangeRate element not found in WU HTML');
+  }
+
+  // Log the 300 chars around the exchangeRate element
+  const snippet = html.slice(Math.max(0, idx - 50), idx + 300);
+  console.log('[WU] Snippet around "exchangeRate":', snippet);
 
   // Match: id="exchangeRate" ...>1.00 EUR = 1,733.9148 ARS</span>
   const match = html.match(/id="exchangeRate"[^>]*>\s*([^<]+?)\s*<\/span>/);
-  if (!match) throw new Error('exchangeRate element not found in WU HTML');
+  if (!match) {
+    console.log('[WU] Regex did not match. Raw snippet:', snippet);
+    throw new Error('exchangeRate regex did not match');
+  }
+
+  console.log('[WU] Matched text:', match[1]);
 
   // Parse the ARS value from "1.00 EUR = 1,733.9148 ARS"
   const rateMatch = match[1].match(/=\s*([\d,]+(?:\.\d+)?)\s*ARS/);
@@ -78,6 +106,7 @@ async function scrapeWURate(): Promise<{ rate: number; timestamp: string }> {
   const rate = parseFloat(rateMatch[1].replace(/,/g, ''));
   if (isNaN(rate) || rate <= 0) throw new Error(`Invalid parsed rate: ${rateMatch[1]}`);
 
+  console.log('[WU] Parsed rate:', rate, 'EUR/ARS');
   return { rate: Math.round(rate * 100) / 100, timestamp: new Date().toISOString() };
 }
 
