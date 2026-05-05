@@ -1,7 +1,5 @@
-// Western Union USD→ARS (dolarapi.com correct endpoint)
-const WU_USD_ARS_URL = 'https://dolarapi.com/v1/dolares/western';
-// EUR→USD mid rate (ECB data via Frankfurter, free, no auth)
-const EUR_USD_URL = 'https://api.frankfurter.app/latest?from=EUR&to=USD';
+// EUR/ARS official rate (used by Western Union in Argentina)
+const COTIZACIONES_URL = 'https://dolarapi.com/v1/cotizaciones';
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL ?? '';
 
 export interface RateResponse {
@@ -20,31 +18,22 @@ export interface HistoryResponse {
  */
 export async function fetchCurrentRate(): Promise<RateResponse> {
   try {
-    // Fetch WU USD/ARS and EUR/USD in parallel
-    const [wuRes, fxRes] = await Promise.all([
-      fetch(WU_USD_ARS_URL, { headers: { Accept: 'application/json' } }),
-      fetch(EUR_USD_URL, { headers: { Accept: 'application/json' } }),
-    ]);
+    const res = await fetch(COTIZACIONES_URL, { headers: { Accept: 'application/json' } });
+    if (!res.ok) throw new Error(`dolarapi returned ${res.status}`);
 
-    if (!wuRes.ok) throw new Error(`dolarapi returned ${wuRes.status}`);
-    if (!fxRes.ok) throw new Error(`frankfurter returned ${fxRes.status}`);
+    const data: Array<{ moneda: string; venta: number; fechaActualizacion?: string }> =
+      await res.json();
 
-    const wuData = await wuRes.json();
-    const fxData = await fxRes.json();
+    const eur = data.find((c) => c.moneda === 'EUR');
+    if (!eur) throw new Error('EUR entry not found');
 
-    const usdArs = parseFloat(String(wuData.venta));
-    const eurUsd = fxData.rates?.USD as number;
-
-    if (isNaN(usdArs) || usdArs <= 0) throw new Error('Invalid USD/ARS rate');
-    if (isNaN(eurUsd) || eurUsd <= 0) throw new Error('Invalid EUR/USD rate');
-
-    // EUR→ARS = (USD/ARS via WU) / (EUR/USD)
-    const eurArs = Math.round((usdArs / eurUsd) * 100) / 100;
+    const rate = Math.round(parseFloat(String(eur.venta)) * 100) / 100;
+    if (isNaN(rate) || rate <= 0) throw new Error('Invalid EUR/ARS rate');
 
     return {
-      rate: eurArs,
+      rate,
       source: 'dolarapi',
-      timestamp: wuData.fechaActualizacion ?? new Date().toISOString(),
+      timestamp: eur.fechaActualizacion ?? new Date().toISOString(),
     };
   } catch (primaryError) {
     console.warn('[api] primary fetch failed, trying backend cache:', primaryError);

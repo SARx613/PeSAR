@@ -20,26 +20,17 @@ import { Redis } from '@upstash/redis';
 
 const redis = Redis.fromEnv();
 
-// Western Union USD→ARS rate (dolarapi.com correct endpoint)
-const WU_USD_ARS_URL = 'https://dolarapi.com/v1/dolares/western';
-// EUR→USD rate (Frankfurter — free, no auth, maintained by ECB data)
-const EUR_USD_URL = 'https://api.frankfurter.app/latest?from=EUR&to=USD';
+// EUR/ARS via dolarapi.com cotizaciones (official bank rate used by Western Union in Argentina)
+const COTIZACIONES_URL = 'https://dolarapi.com/v1/cotizaciones';
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 
-interface DolarApiResponse {
+interface CotizacionEntry {
   moneda: string;
   casa: string;
   nombre: string;
   compra: number;
   venta: number;
   fechaActualizacion: string;
-}
-
-interface FrankfurterResponse {
-  amount: number;
-  base: string;
-  date: string;
-  rates: { USD: number };
 }
 
 interface RatePoint {
@@ -58,32 +49,21 @@ interface ExpoPushMessage {
 }
 
 async function fetchRate(): Promise<{ rate: number; timestamp: string }> {
-  // Fetch both in parallel for speed
-  const [wuRes, fxRes] = await Promise.all([
-    fetch(WU_USD_ARS_URL, { headers: { Accept: 'application/json' } }),
-    fetch(EUR_USD_URL, { headers: { Accept: 'application/json' } }),
-  ]);
+  const res = await fetch(COTIZACIONES_URL, { headers: { Accept: 'application/json' } });
+  if (!res.ok) throw new Error(`dolarapi.com/cotizaciones returned ${res.status}`);
 
-  if (!wuRes.ok) throw new Error(`dolarapi.com/dolares/western returned ${wuRes.status}`);
-  if (!fxRes.ok) throw new Error(`frankfurter.app returned ${fxRes.status}`);
+  const data = (await res.json()) as CotizacionEntry[];
 
-  const wuData = (await wuRes.json()) as DolarApiResponse;
-  const fxData = (await fxRes.json()) as FrankfurterResponse;
+  // Find the EUR entry (moneda === 'EUR')
+  const eur = data.find((c) => c.moneda === 'EUR');
+  if (!eur) throw new Error('EUR entry not found in dolarapi cotizaciones');
 
-  // WU sell rate: how many ARS you get per 1 USD via Western Union
-  const usdArs = parseFloat(String(wuData.venta));
-  // EUR/USD mid rate from ECB
-  const eurUsd = fxData.rates.USD;
-
-  if (isNaN(usdArs) || usdArs <= 0) throw new Error(`Invalid USD/ARS rate: ${wuData.venta}`);
-  if (isNaN(eurUsd) || eurUsd <= 0) throw new Error(`Invalid EUR/USD rate: ${fxData.rates.USD}`);
-
-  // EUR→ARS = (USD/ARS via WU) / (EUR/USD)  →  ARS per 1 EUR
-  const eurArs = usdArs / eurUsd;
+  const rate = parseFloat(String(eur.venta));
+  if (isNaN(rate) || rate <= 0) throw new Error(`Invalid EUR/ARS venta: ${eur.venta}`);
 
   return {
-    rate: Math.round(eurArs * 100) / 100,
-    timestamp: wuData.fechaActualizacion ?? new Date().toISOString(),
+    rate: Math.round(rate * 100) / 100,
+    timestamp: eur.fechaActualizacion ?? new Date().toISOString(),
   };
 }
 
