@@ -1,6 +1,6 @@
 /**
  * GET /api/rate-history
- * Returns the last 96 rate points (24h of history) from Upstash Redis.
+ * Returns all stored rate points (up to ~3 months of history) from Upstash Redis.
  *
  * Environment variables:
  *   UPSTASH_REDIS_REST_URL

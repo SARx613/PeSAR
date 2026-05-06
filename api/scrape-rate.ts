@@ -240,8 +240,8 @@ async function storeRate(rate: number, timestamp: string): Promise<void> {
   // Push to history list (newest last)
   await redis.rpush('rate_history', JSON.stringify(point));
 
-  // Keep only last 96 entries (24h at 15-min intervals)
-  await redis.ltrim('rate_history', -96, -1);
+  // Keep last 8 640 entries (~3 months at 15-min intervals)
+  await redis.ltrim('rate_history', -8640, -1);
 }
 
 async function sendSilentPushToAll(rate: number, timestamp: string): Promise<void> {

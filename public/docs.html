@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PeSAR — Documentation API</title>
+  <style>
+    :root {
+      --bg:          #06061a;
+      --card:        #0d0d2b;
+      --border:      #1e1e3a;
+      --text:        #ffffff;
+      --muted:       #636399;
+      --accent:      #2979ff;
+      --code-bg:     #0a0a1e;
+      --up:          #00e676;
+      --lock:        #ff9f0a;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg:       #f0f4ff;
+        --card:     #ffffff;
+        --border:   #dde5ff;
+        --text:     #0a0a2e;
+        --muted:    #6b7ab0;
+        --accent:   #1a5fff;
+        --code-bg:  #e8edff;
+        --up:       #00a94f;
+        --lock:     #b06200;
+      }
+    }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+    .wrapper {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 48px 20px 80px;
+    }
+    header {
+      margin-bottom: 40px;
+    }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 24px;
+    }
+    .back-link:hover { text-decoration: underline; }
+    h1 { font-size: 32px; font-weight: 800; letter-spacing: -1px; margin-bottom: 8px; }
+    h1 span { color: var(--accent); }
+    .subtitle { color: var(--muted); font-size: 15px; line-height: 1.6; }
+    .section { margin-top: 40px; }
+    h2 { font-size: 18px; font-weight: 700; margin-bottom: 16px; }
+    .endpoint-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+    .endpoint-head {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .method {
+      background: rgba(41,121,255,0.15);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 8px;
+      font-family: monospace;
+    }
+    .method.post {
+      background: rgba(0,230,118,0.12);
+      color: var(--up);
+    }
+    .method.lock {
+      background: rgba(255,159,10,0.12);
+      color: var(--lock);
+    }
+    .path {
+      font-family: "SF Mono", "Fira Code", monospace;
+      font-size: 14px;
+      color: var(--text);
+      font-weight: 600;
+    }
+    .lock-badge {
+      margin-left: auto;
+      font-size: 11px;
+      color: var(--lock);
+      background: rgba(255,159,10,0.1);
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-weight: 600;
+    }
+    .endpoint-body {
+      padding: 16px 20px;
+      font-size: 14px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    .endpoint-body p { margin-bottom: 10px; }
+    .endpoint-body p:last-child { margin-bottom: 0; }
+    pre {
+      background: var(--code-bg);
+      border-radius: 10px;
+      padding: 14px 16px;
+      overflow-x: auto;
+      font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--text);
+      margin-top: 10px;
+    }
+    .tag {
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 6px;
+      margin-bottom: 6px;
+    }
+    .tag.response { background: rgba(0,230,118,0.1); color: var(--up); }
+    .note {
+      background: rgba(41,121,255,0.08);
+      border: 1px solid rgba(41,121,255,0.2);
+      border-radius: 12px;
+      padding: 14px 16px;
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 24px;
+      line-height: 1.6;
+    }
+    footer {
+      margin-top: 48px;
+      text-align: center;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    footer a { color: var(--accent); text-decoration: none; font-weight: 600; }
+    footer a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <header>
+      <a href="/" class="back-link">← Retour au tableau de bord</a>
+      <h1>Pe<span>SAR</span> — API</h1>
+      <p class="subtitle">
+        Backend — Taux de change EUR&nbsp;→&nbsp;ARS (Western Union)<br/>
+        Actualisé automatiquement toutes les 15 min via GitHub Actions.
+      </p>
+    </header>
+
+    <div class="section">
+      <h2>Endpoints</h2>
+
+      <!-- /api/latest-rate -->
+      <div class="endpoint-card">
+        <div class="endpoint-head">
+          <span class="method">GET</span>
+          <span class="path">/api/latest-rate</span>
+        </div>
+        <div class="endpoint-body">
+          <p>Retourne le dernier taux EUR&nbsp;→&nbsp;ARS enregistré dans Redis.</p>
+          <span class="tag response">200 OK</span>
+          <pre>{
+  "ok": true,
+  "rate": 1234.56,
+  "timestamp": "2026-05-06T15:00:00.000Z"
+}</pre>
+        </div>
+      </div>
+
+      <!-- /api/rate-history -->
+      <div class="endpoint-card">
+        <div class="endpoint-head">
+          <span class="method">GET</span>
+          <span class="path">/api/rate-history</span>
+        </div>
+        <div class="endpoint-body">
+          <p>Retourne l'historique complet des taux stockés en Redis (jusqu'à 96 points, soit ~24h à intervalles de 15 min).</p>
+          <span class="tag response">200 OK</span>
+          <pre>{
+  "ok": true,
+  "history": [
+    { "rate": 1230.00, "timestamp": "2026-05-05T15:00:00.000Z" },
+    { "rate": 1234.56, "timestamp": "2026-05-06T15:00:00.000Z" }
+  ]
+}</pre>
+        </div>
+      </div>
+
+      <!-- /api/register-token -->
+      <div class="endpoint-card">
+        <div class="endpoint-head">
+          <span class="method post">POST</span>
+          <span class="path">/api/register-token</span>
+        </div>
+        <div class="endpoint-body">
+          <p>Enregistre un token Expo Push Notifications pour recevoir les mises à jour silencieuses de taux.</p>
+          <span class="tag response">200 OK</span>
+          <pre>{
+  "ok": true
+}</pre>
+        </div>
+      </div>
+
+      <!-- /api/scrape-rate -->
+      <div class="endpoint-card">
+        <div class="endpoint-head">
+          <span class="method lock">GET</span>
+          <span class="path">/api/scrape-rate</span>
+          <span class="lock-badge">🔒 Protégé</span>
+        </div>
+        <div class="endpoint-body">
+          <p>Déclenche le scraping du taux Western Union, stocke le résultat dans Redis et envoie une notification silencieuse à tous les tokens enregistrés.</p>
+          <p>Nécessite le header <code>Authorization: Bearer &lt;CRON_SECRET&gt;</code>.</p>
+          <span class="tag response">200 OK</span>
+          <pre>{
+  "ok": true,
+  "rate": 1234.56,
+  "timestamp": "2026-05-06T15:00:00.000Z",
+  "source": "western_union_graphql"
+}</pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      💡 Le scraping utilise l'API GraphQL publique de Western Union comme source principale,
+      avec un fallback vers <strong>dolarapi.com</strong> en cas d'échec.
+      Le job GitHub Actions tourne toutes les 15 minutes.
+    </div>
+
+    <footer>
+      <a href="/">← Tableau de bord</a>
+    </footer>
+  </div>
+</body>
+</html>

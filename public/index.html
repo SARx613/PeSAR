@@ -2,65 +2,873 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PeSAR — API</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>PeSAR — EUR → ARS</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg:           #06061a;
+      --bg2:          #0d0d2b;
+      --card:         rgba(255,255,255,0.04);
+      --card-border:  rgba(255,255,255,0.08);
+      --text:         #ffffff;
+      --text-muted:   rgba(255,255,255,0.45);
+      --text-soft:    rgba(255,255,255,0.7);
+      --accent:       #2979ff;
+      --accent-glow:  rgba(41,121,255,0.35);
+      --accent2:      #00d2ff;
+      --up:           #00e676;
+      --up-bg:        rgba(0,230,118,0.12);
+      --down:         #ff1744;
+      --down-bg:      rgba(255,23,68,0.12);
+      --neutral:      rgba(255,255,255,0.3);
+      --neutral-bg:   rgba(255,255,255,0.06);
+      --btn-active:   rgba(41,121,255,0.18);
+      --shadow:       0 20px 60px rgba(0,0,0,0.6);
+      --radius:       20px;
+      --chart-line:   #2979ff;
+    }
+
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg:           #eef2ff;
+        --bg2:          #e8edff;
+        --card:         rgba(255,255,255,0.75);
+        --card-border:  rgba(41,121,255,0.15);
+        --text:         #0a0a2e;
+        --text-muted:   rgba(10,10,46,0.45);
+        --text-soft:    rgba(10,10,46,0.7);
+        --accent:       #1a5fff;
+        --accent-glow:  rgba(26,95,255,0.2);
+        --accent2:      #0099cc;
+        --up:           #00a94f;
+        --up-bg:        rgba(0,169,79,0.1);
+        --down:         #d50032;
+        --down-bg:      rgba(213,0,50,0.1);
+        --neutral:      rgba(10,10,46,0.35);
+        --neutral-bg:   rgba(10,10,46,0.06);
+        --btn-active:   rgba(26,95,255,0.12);
+        --shadow:       0 20px 60px rgba(41,121,255,0.12);
+        --chart-line:   #1a5fff;
+      }
+    }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: #000;
-      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
       min-height: 100vh;
+      min-height: 100dvh;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Animated background ── */
+    .bg-mesh {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      overflow: hidden;
+      pointer-events: none;
+    }
+    .bg-mesh::before,
+    .bg-mesh::after {
+      content: '';
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(120px);
+      opacity: 0.25;
+      animation: drift 18s ease-in-out infinite alternate;
+    }
+    .bg-mesh::before {
+      width: 70vw; height: 70vw;
+      background: radial-gradient(circle, var(--accent) 0%, transparent 70%);
+      top: -20%; left: -20%;
+      animation-duration: 22s;
+    }
+    .bg-mesh::after {
+      width: 55vw; height: 55vw;
+      background: radial-gradient(circle, var(--accent2) 0%, transparent 70%);
+      bottom: -15%; right: -15%;
+      animation-duration: 16s;
+      animation-delay: -8s;
+    }
+
+    @media (prefers-color-scheme: light) {
+      .bg-mesh::before { opacity: 0.12; }
+      .bg-mesh::after  { opacity: 0.10; }
+    }
+
+    @keyframes drift {
+      0%   { transform: translate(0, 0) scale(1); }
+      50%  { transform: translate(5%, 8%) scale(1.1); }
+      100% { transform: translate(-3%, 5%) scale(0.95); }
+    }
+
+    /* ── Grid lines ── */
+    .bg-grid {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(var(--card-border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--card-border) 1px, transparent 1px);
+      background-size: 60px 60px;
+      opacity: 0.4;
+    }
+    @media (prefers-color-scheme: light) { .bg-grid { opacity: 0.25; } }
+
+    /* ── Layout ── */
+    .wrapper {
+      position: relative;
+      z-index: 1;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 32px 20px 60px;
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 36px;
+    }
+    .logo {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      color: var(--text);
+    }
+    .logo span { color: var(--accent); }
+
+    .wu-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: 50px;
+      padding: 6px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-soft);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+    .wu-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--up);
+      box-shadow: 0 0 8px var(--up);
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.5; transform: scale(0.85); }
+    }
+
+    /* ── Hero rate ── */
+    .hero {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    .hero-label {
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+    .hero-rate {
+      font-size: clamp(52px, 13vw, 88px);
+      font-weight: 800;
+      letter-spacing: -3px;
+      line-height: 1;
+      background: linear-gradient(135deg, var(--text) 0%, var(--accent2) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 14px;
+      min-height: 90px;
       display: flex;
       align-items: center;
       justify-content: center;
     }
+    .hero-rate.loading {
+      background: var(--card);
+      -webkit-background-clip: unset;
+      background-clip: unset;
+      -webkit-text-fill-color: transparent;
+      border-radius: 16px;
+      animation: shimmer 1.6s ease-in-out infinite;
+      width: 380px;
+      max-width: 90%;
+      margin: 0 auto 14px;
+    }
+    @keyframes shimmer {
+      0%   { opacity: 0.5; }
+      50%  { opacity: 0.9; }
+      100% { opacity: 0.5; }
+    }
+    .hero-sub {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .hero-change {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 16px;
+      font-weight: 700;
+      padding: 5px 14px;
+      border-radius: 50px;
+    }
+    .hero-change.up   { color: var(--up);   background: var(--up-bg); }
+    .hero-change.down { color: var(--down); background: var(--down-bg); }
+    .hero-change.neutral { color: var(--neutral); background: var(--neutral-bg); }
+    .hero-time {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    /* ── Card glass ── */
     .card {
-      background: #1c1c1e;
-      border: 1px solid #38383a;
-      border-radius: 20px;
-      padding: 40px;
-      max-width: 480px;
-      width: 90%;
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    /* ── Time range buttons ── */
+    .range-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--card-border);
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .range-bar::-webkit-scrollbar { display: none; }
+
+    .range-btn {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: transparent;
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 7px 14px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-soft);
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+    .range-btn:hover {
+      border-color: var(--accent);
+      color: var(--text);
+      background: var(--btn-active);
+    }
+    .range-btn.active {
+      background: var(--btn-active);
+      border-color: var(--accent);
+      color: var(--text);
+      box-shadow: 0 0 16px var(--accent-glow);
+    }
+    .range-pct {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 6px;
+      letter-spacing: 0.2px;
+    }
+    .range-pct.up   { color: var(--up);   background: var(--up-bg); }
+    .range-pct.down { color: var(--down); background: var(--down-bg); }
+    .range-pct.neutral { color: var(--neutral); background: var(--neutral-bg); }
+    .range-pct.loading-pct {
+      color: transparent;
+      background: var(--neutral-bg);
+      min-width: 36px;
+      animation: shimmer 1.6s ease-in-out infinite;
+    }
+
+    /* ── Chart ── */
+    .chart-wrap {
+      padding: 20px 16px 8px;
+      position: relative;
+    }
+    .chart-wrap canvas { max-height: 280px; }
+
+    .chart-overlay {
+      display: none;
+      position: absolute;
+      inset: 0;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .chart-overlay.visible { display: flex; }
+    .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid var(--card-border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .chart-empty-msg {
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+
+    /* ── Chart stats bar ── */
+    .stats-bar {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      border-top: 1px solid var(--card-border);
+      background: var(--card-border);
+    }
+    .stat-item {
+      background: var(--bg);
+      padding: 14px 16px;
       text-align: center;
     }
-    h1 { font-size: 2rem; font-weight: 700; letter-spacing: -1px; margin-bottom: 8px; }
-    .accent { color: #0a84ff; }
-    p { color: #636366; font-size: 15px; line-height: 1.6; margin-bottom: 24px; }
-    .endpoints { text-align: left; background: #0d0d0f; border-radius: 12px; padding: 16px; }
-    .endpoint { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #38383a; }
-    .endpoint:last-child { border-bottom: none; }
-    .method { background: #0a84ff22; color: #0a84ff; font-size: 11px; font-weight: 700;
-              padding: 2px 8px; border-radius: 6px; font-family: monospace; min-width: 40px; text-align: center; }
-    .path { font-family: monospace; font-size: 13px; color: #ebebf5cc; }
-    .badge { margin-top: 24px; font-size: 12px; color: #636366; }
+    @media (prefers-color-scheme: light) {
+      .stat-item { background: rgba(255,255,255,0.6); }
+    }
+    .stat-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+    .stat-value {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
+    .stat-value.up   { color: var(--up); }
+    .stat-value.down { color: var(--down); }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center;
+      margin-top: 28px;
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    footer a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    footer a:hover { text-decoration: underline; }
+    .footer-sep { opacity: 0.3; }
+
+    /* ── Responsive ── */
+    @media (max-width: 480px) {
+      .wrapper { padding: 20px 14px 50px; }
+      header { margin-bottom: 24px; }
+      .hero { margin-bottom: 28px; }
+      .stats-bar { grid-template-columns: repeat(3, 1fr); }
+      .stat-item { padding: 12px 10px; }
+      .stat-value { font-size: 14px; }
+      .chart-wrap canvas { max-height: 220px; }
+    }
+    @media (max-width: 360px) {
+      .stats-bar { grid-template-columns: 1fr 1fr; }
+      .stat-item:last-child { grid-column: span 2; }
+    }
+
+    /* ── Error toast ── */
+    #error-toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: rgba(255,23,68,0.15);
+      border: 1px solid rgba(255,23,68,0.3);
+      color: var(--down);
+      padding: 10px 20px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 600;
+      backdrop-filter: blur(12px);
+      transition: transform 0.3s ease;
+      z-index: 100;
+      white-space: nowrap;
+    }
+    #error-toast.show { transform: translateX(-50%) translateY(0); }
   </style>
 </head>
 <body>
-  <div class="card">
-    <h1>Pe<span class="accent">SAR</span></h1>
-    <p>Backend API — Taux de change EUR → ARS (Western Union)<br/>Appelé automatiquement toutes les 15 min par GitHub Actions.</p>
+  <div class="bg-mesh"></div>
+  <div class="bg-grid"></div>
 
-    <div class="endpoints">
-      <div class="endpoint">
-        <span class="method">GET</span>
-        <span class="path">/api/latest-rate</span>
+  <div class="wrapper">
+
+    <!-- Header -->
+    <header>
+      <div class="logo">Pe<span>SAR</span></div>
+      <div class="wu-badge">
+        <div class="wu-dot"></div>
+        Western Union
       </div>
-      <div class="endpoint">
-        <span class="method">GET</span>
-        <span class="path">/api/rate-history</span>
+    </header>
+
+    <!-- Hero rate -->
+    <section class="hero">
+      <div class="hero-label">1 EUR en pesos argentins</div>
+      <div class="hero-rate loading" id="hero-rate">—</div>
+      <div class="hero-sub">
+        <span class="hero-change neutral" id="hero-change">—</span>
+        <span class="hero-time" id="hero-time">Chargement…</span>
       </div>
-      <div class="endpoint">
-        <span class="method">POST</span>
-        <span class="path">/api/register-token</span>
+    </section>
+
+    <!-- Chart card -->
+    <div class="card">
+      <!-- Range selector -->
+      <div class="range-bar" id="range-bar">
+        <button class="range-btn active" data-range="1D">
+          1J <span class="range-pct loading-pct" id="pct-1D">&nbsp;&nbsp;&nbsp;&nbsp;</span>
+        </button>
+        <button class="range-btn" data-range="1W">
+          1S <span class="range-pct loading-pct" id="pct-1W">&nbsp;&nbsp;&nbsp;&nbsp;</span>
+        </button>
+        <button class="range-btn" data-range="1M">
+          1M <span class="range-pct loading-pct" id="pct-1M">&nbsp;&nbsp;&nbsp;&nbsp;</span>
+        </button>
+        <button class="range-btn" data-range="3M">
+          3M <span class="range-pct loading-pct" id="pct-3M">&nbsp;&nbsp;&nbsp;&nbsp;</span>
+        </button>
+        <button class="range-btn" data-range="6M">
+          6M <span class="range-pct loading-pct" id="pct-6M">&nbsp;&nbsp;&nbsp;&nbsp;</span>
+        </button>
+        <button class="range-btn" data-range="1Y">
+          1A <span class="range-pct loading-pct" id="pct-1Y">&nbsp;&nbsp;&nbsp;&nbsp;</span>
+        </button>
       </div>
-      <div class="endpoint">
-        <span class="method">GET</span>
-        <span class="path">/api/scrape-rate 🔒</span>
+
+      <!-- Chart -->
+      <div class="chart-wrap">
+        <canvas id="chart"></canvas>
+        <div class="chart-overlay visible" id="chart-overlay">
+          <div class="spinner"></div>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-bar">
+        <div class="stat-item">
+          <div class="stat-label">Min</div>
+          <div class="stat-value down" id="stat-min">—</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">Max</div>
+          <div class="stat-value up" id="stat-max">—</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">Moy</div>
+          <div class="stat-value" id="stat-avg">—</div>
+        </div>
       </div>
     </div>
 
-    <p class="badge">🔒 /api/scrape-rate nécessite un header Authorization</p>
+    <!-- Footer -->
+    <footer>
+      <span>Actualisé toutes les 15 min</span>
+      <span class="footer-sep">|</span>
+      <a href="/docs">Documentation API</a>
+      <span class="footer-sep">|</span>
+      <span id="footer-ts">—</span>
+    </footer>
+
   </div>
+
+  <div id="error-toast"></div>
+
+  <script>
+  (() => {
+    'use strict';
+
+    /* ── Config ── */
+    const RANGES = {
+      '1D': 1,
+      '1W': 7,
+      '1M': 30,
+      '3M': 90,
+      '6M': 180,
+      '1Y': 365,
+    };
+
+    /* ── State ── */
+    let allHistory = [];
+    let currentRange = '1D';
+    let chart = null;
+    let refreshTimer = null;
+
+    /* ── DOM refs ── */
+    const heroRate    = document.getElementById('hero-rate');
+    const heroChange  = document.getElementById('hero-change');
+    const heroTime    = document.getElementById('hero-time');
+    const chartCanvas = document.getElementById('chart');
+    const chartOverlay= document.getElementById('chart-overlay');
+    const statMin     = document.getElementById('stat-min');
+    const statMax     = document.getElementById('stat-max');
+    const statAvg     = document.getElementById('stat-avg');
+    const footerTs    = document.getElementById('footer-ts');
+    const errorToast  = document.getElementById('error-toast');
+    const rangeBtns   = document.querySelectorAll('.range-btn');
+
+    /* ── Helpers ── */
+    function fmtRate(r) {
+      return new Intl.NumberFormat('fr-AR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(r);
+    }
+
+    function fmtPct(pct, signed = true) {
+      const abs = Math.abs(pct).toFixed(2);
+      if (!signed) return abs + '%';
+      return (pct >= 0 ? '+' : '−') + abs + '%';
+    }
+
+    function relativeTime(iso) {
+      const diff = Math.floor((Date.now() - new Date(iso)) / 1000);
+      if (diff < 60)  return 'il y a quelques secondes';
+      if (diff < 3600) {
+        const m = Math.floor(diff / 60);
+        return `il y a ${m} min${m > 1 ? 's' : ''}`;
+      }
+      const h = Math.floor(diff / 3600);
+      return `il y a ${h} h`;
+    }
+
+    function showError(msg) {
+      errorToast.textContent = msg;
+      errorToast.classList.add('show');
+      setTimeout(() => errorToast.classList.remove('show'), 4000);
+    }
+
+    function filterHistory(days) {
+      if (!allHistory.length) return [];
+      const cutoff = Date.now() - days * 86400000;
+      const filtered = allHistory.filter(p => new Date(p.timestamp).getTime() >= cutoff);
+      return filtered.length >= 2 ? filtered : allHistory.slice(-Math.min(2, allHistory.length));
+    }
+
+    function calcPct(points) {
+      if (!points || points.length < 2) return null;
+      const first = points[0].rate;
+      const last  = points[points.length - 1].rate;
+      return ((last - first) / first) * 100;
+    }
+
+    /* ── Detect dark mode for chart ── */
+    const darkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const C = {
+      line:        darkMode ? '#2979ff' : '#1a5fff',
+      gridLine:    darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(10,10,46,0.06)',
+      tickColor:   darkMode ? 'rgba(255,255,255,0.4)'  : 'rgba(10,10,46,0.4)',
+      tooltipBg:   darkMode ? '#0d1333' : '#ffffff',
+      tooltipText: darkMode ? '#ffffff' : '#0a0a2e',
+      tooltipBorder: darkMode ? 'rgba(255,255,255,0.1)' : 'rgba(10,10,46,0.1)',
+    };
+
+    /* ── Chart init ── */
+    function buildGradient(ctx, chartArea, isUp) {
+      const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+      if (isUp) {
+        gradient.addColorStop(0,   darkMode ? 'rgba(41,121,255,0.35)' : 'rgba(26,95,255,0.25)');
+        gradient.addColorStop(0.7, darkMode ? 'rgba(41,121,255,0.08)' : 'rgba(26,95,255,0.06)');
+        gradient.addColorStop(1,   'rgba(0,0,0,0)');
+      } else {
+        gradient.addColorStop(0,   darkMode ? 'rgba(255,23,68,0.25)'  : 'rgba(213,0,50,0.18)');
+        gradient.addColorStop(0.7, darkMode ? 'rgba(255,23,68,0.06)'  : 'rgba(213,0,50,0.04)');
+        gradient.addColorStop(1,   'rgba(0,0,0,0)');
+      }
+      return gradient;
+    }
+
+    function initChart(labels, values, isUp) {
+      if (chart) chart.destroy();
+
+      chartOverlay.classList.remove('visible');
+
+      const ctx = chartCanvas.getContext('2d');
+
+      chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            data: values,
+            borderColor: isUp
+              ? (darkMode ? '#2979ff' : '#1a5fff')
+              : (darkMode ? '#ff1744' : '#d50032'),
+            borderWidth: 2.5,
+            pointRadius: 0,
+            pointHoverRadius: 6,
+            pointHoverBackgroundColor: isUp
+              ? (darkMode ? '#2979ff' : '#1a5fff')
+              : (darkMode ? '#ff1744' : '#d50032'),
+            pointHoverBorderColor: darkMode ? '#ffffff' : '#ffffff',
+            pointHoverBorderWidth: 2,
+            tension: 0.35,
+            fill: true,
+            backgroundColor(context) {
+              const chart = context.chart;
+              const { ctx: c, chartArea } = chart;
+              if (!chartArea) return 'transparent';
+              return buildGradient(c, chartArea, isUp);
+            },
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          aspectRatio: window.innerWidth < 480 ? 1.8 : 2.8,
+          animation: { duration: 600, easing: 'easeInOutQuart' },
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: C.tooltipBg,
+              titleColor: C.tooltipText,
+              bodyColor: C.tooltipText,
+              borderColor: C.tooltipBorder,
+              borderWidth: 1,
+              padding: 12,
+              cornerRadius: 12,
+              titleFont: { size: 12, weight: '600' },
+              bodyFont: { size: 15, weight: '800' },
+              callbacks: {
+                title(items) {
+                  return items[0].label;
+                },
+                label(item) {
+                  return ' ' + fmtRate(item.parsed.y) + ' ARS';
+                },
+              },
+            },
+          },
+          scales: {
+            x: {
+              grid: { color: C.gridLine, drawBorder: false },
+              ticks: {
+                color: C.tickColor,
+                font: { size: 11 },
+                maxTicksLimit: window.innerWidth < 480 ? 4 : 6,
+                maxRotation: 0,
+              },
+              border: { display: false },
+            },
+            y: {
+              position: 'right',
+              grid: { color: C.gridLine, drawBorder: false },
+              ticks: {
+                color: C.tickColor,
+                font: { size: 11 },
+                maxTicksLimit: 5,
+                callback: v => fmtRate(v),
+              },
+              border: { display: false },
+            },
+          },
+        },
+      });
+    }
+
+    /* ── Format chart label ── */
+    function fmtLabel(iso, days) {
+      const d = new Date(iso);
+      if (days <= 1) {
+        return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+      }
+      if (days <= 7) {
+        return d.toLocaleDateString('fr-FR', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+      }
+      return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
+    }
+
+    /* ── Render chart for a range ── */
+    function renderRange(range) {
+      const days    = RANGES[range];
+      const points  = filterHistory(days);
+      const labels  = points.map(p => fmtLabel(p.timestamp, days));
+      const values  = points.map(p => p.rate);
+      const pct     = calcPct(points);
+      const isUp    = pct === null ? true : pct >= 0;
+
+      if (points.length < 2) {
+        if (!chart) {
+          chartOverlay.classList.add('visible');
+          chartOverlay.innerHTML = '<div class="chart-empty-msg">Données insuffisantes pour cette période</div>';
+        }
+      } else {
+        chartOverlay.innerHTML = '<div class="spinner"></div>';
+        initChart(labels, values, isUp);
+      }
+
+      /* Stats */
+      if (values.length) {
+        const min = Math.min(...values);
+        const max = Math.max(...values);
+        const avg = values.reduce((a, b) => a + b, 0) / values.length;
+        statMin.textContent = fmtRate(min);
+        statMax.textContent = fmtRate(max);
+        statAvg.textContent = fmtRate(avg);
+      }
+    }
+
+    /* ── Update percentage badges ── */
+    function updateBadges() {
+      Object.entries(RANGES).forEach(([key, days]) => {
+        const el  = document.getElementById('pct-' + key);
+        if (!el) return;
+        const pts = filterHistory(days);
+        const pct = calcPct(pts);
+
+        el.classList.remove('loading-pct', 'up', 'down', 'neutral');
+
+        if (pct === null || pts.length < 2) {
+          el.textContent = '—';
+          el.classList.add('neutral');
+        } else if (pct >= 0) {
+          el.textContent = fmtPct(pct);
+          el.classList.add('up');
+        } else {
+          el.textContent = fmtPct(pct);
+          el.classList.add('down');
+        }
+      });
+    }
+
+    /* ── Update hero ── */
+    function updateHero(latest) {
+      heroRate.classList.remove('loading');
+      heroRate.textContent = fmtRate(latest.rate) + ' ';
+
+      const pts1D = filterHistory(1);
+      const pct   = calcPct(pts1D);
+
+      heroChange.className = 'hero-change';
+      if (pct === null) {
+        heroChange.textContent = '—';
+        heroChange.classList.add('neutral');
+      } else if (pct >= 0) {
+        const diff = latest.rate - pts1D[0].rate;
+        heroChange.innerHTML = '▲ +' + fmtRate(diff) + ' (+' + Math.abs(pct).toFixed(2) + '%)';
+        heroChange.classList.add('up');
+      } else {
+        const diff = pts1D[0].rate - latest.rate;
+        heroChange.innerHTML = '▼ −' + fmtRate(diff) + ' (−' + Math.abs(pct).toFixed(2) + '%)';
+        heroChange.classList.add('down');
+      }
+
+      heroTime.textContent = relativeTime(latest.timestamp);
+      footerTs.textContent = 'Dernière MAJ : ' + new Date(latest.timestamp).toLocaleString('fr-FR', {
+        day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
+      });
+    }
+
+    /* ── Fetch & refresh ── */
+    async function fetchData() {
+      try {
+        const [histRes, latestRes] = await Promise.all([
+          fetch('/api/rate-history'),
+          fetch('/api/latest-rate'),
+        ]);
+
+        if (!histRes.ok || !latestRes.ok) throw new Error('Erreur réseau');
+
+        const histData   = await histRes.json();
+        const latestData = await latestRes.json();
+
+        if (!histData.ok || !latestData.ok) throw new Error('Données invalides');
+
+        /* Sort history ascending by timestamp */
+        allHistory = (histData.history || []).sort(
+          (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
+        );
+
+        /* Append latest if newer than last stored */
+        if (allHistory.length === 0 || new Date(latestData.timestamp) > new Date(allHistory[allHistory.length - 1].timestamp)) {
+          allHistory.push({ rate: latestData.rate, timestamp: latestData.timestamp });
+        }
+
+        updateHero(latestData);
+        updateBadges();
+        renderRange(currentRange);
+
+      } catch (err) {
+        showError('Erreur de chargement des données');
+        chartOverlay.innerHTML = '<div class="chart-empty-msg">Impossible de charger les données</div>';
+        chartOverlay.classList.add('visible');
+        console.error(err);
+      }
+    }
+
+    /* ── Range button click ── */
+    rangeBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        rangeBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentRange = btn.dataset.range;
+        renderRange(currentRange);
+      });
+    });
+
+    /* ── Auto-refresh every 5 min ── */
+    function scheduleRefresh() {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(async () => {
+        await fetchData();
+        scheduleRefresh();
+      }, 5 * 60 * 1000);
+    }
+
+    /* ── Update relative time every minute ── */
+    setInterval(() => {
+      if (allHistory.length) {
+        const last = allHistory[allHistory.length - 1];
+        heroTime.textContent = relativeTime(last.timestamp);
+      }
+    }, 60000);
+
+    /* ── Init ── */
+    fetchData().then(scheduleRefresh);
+
+  })();
+  </script>
 </body>
 </html>
