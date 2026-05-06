@@ -145,12 +145,24 @@
     .logo {
       display: flex;
       align-items: center;
+      gap: 12px;
     }
     .logo img {
       height: 44px;
       width: auto;
       display: block;
+      border-radius: 14px;
     }
+    .logo-text {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      color: var(--text);
+      line-height: 1;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .logo-text span { color: var(--accent); }
     .logo .logo-dark  { display: block; }
     .logo .logo-light { display: none; }
     @media (prefers-color-scheme: light) {
@@ -450,6 +462,7 @@
       <div class="logo">
         <img class="logo-dark"  src="logo-dark.png"  alt="PeSAR" />
         <img class="logo-light" src="logo-light.png" alt="PeSAR" />
+        <div class="logo-text">Pe<span>SAR</span></div>
       </div>
       <div class="wu-badge">
         <div class="wu-dot"></div>
