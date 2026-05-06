@@ -4,9 +4,37 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>PeSAR — EUR → ARS</title>
-  <link rel="icon" href="logo-dark.png" media="(prefers-color-scheme: dark)" />
-  <link rel="icon" href="logo-light.png" media="(prefers-color-scheme: light)" />
-  <link rel="icon" href="logo-dark.png" />
+  <link rel="icon" type="image/png" href="logo-dark.png" media="(prefers-color-scheme: dark)" />
+  <link rel="icon" type="image/png" href="logo-light.png" media="(prefers-color-scheme: light)" />
+  <link rel="icon" type="image/png" href="logo-dark.png" />
+  <script>
+    // Some browsers ignore media queries on <link rel="icon">.
+    // This keeps the favicon in sync with the OS theme.
+    (() => {
+      const darkHref = "logo-dark.png";
+      const lightHref = "logo-light.png";
+      const mql = window.matchMedia?.("(prefers-color-scheme: light)");
+
+      const ensureFaviconLink = () => {
+        let link =
+          document.querySelector('link[rel="icon"][data-dynamic="true"]') ||
+          document.querySelector('link[rel="icon"]:not([media])');
+
+        if (!link) {
+          link = document.createElement("link");
+          link.rel = "icon";
+          link.type = "image/png";
+          document.head.appendChild(link);
+        }
+
+        link.setAttribute("data-dynamic", "true");
+        link.href = mql?.matches ? lightHref : darkHref;
+      };
+
+      ensureFaviconLink();
+      mql?.addEventListener?.("change", ensureFaviconLink);
+    })();
+  </script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   <style>
     :root {
