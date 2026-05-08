@@ -423,6 +423,130 @@
     .stat-value.up   { color: var(--up); }
     .stat-value.down { color: var(--down); }
 
+    /* ── Currency Converter ── */
+    .converter-card {
+      margin-bottom: 20px;
+    }
+    .converter-inner {
+      padding: 20px 24px 22px;
+    }
+    .converter-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .converter-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .converter-rate-badge {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--accent);
+      background: rgba(41,121,255,0.12);
+      padding: 3px 10px;
+      border-radius: 50px;
+      font-variant-numeric: tabular-nums;
+    }
+    .converter-inputs {
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+    }
+    .converter-field {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .converter-label {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.8px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+    .converter-label .flag { font-size: 14px; }
+    .converter-input {
+      width: 100%;
+      background: rgba(255,255,255,0.05);
+      border: 1.5px solid var(--card-border);
+      border-radius: 12px;
+      padding: 11px 14px;
+      font-family: inherit;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text);
+      text-align: right;
+      outline: none;
+      transition: border-color 0.2s ease;
+      font-variant-numeric: tabular-nums;
+    }
+    .converter-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+    .converter-input::placeholder { color: var(--text-muted); }
+    @media (prefers-color-scheme: light) {
+      .converter-input { background: rgba(10,10,46,0.04); }
+    }
+    .converter-swap {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 22px;
+      padding: 0 4px 10px;
+      color: var(--accent);
+      transition: transform 0.35s ease;
+      line-height: 1;
+    }
+    .converter-swap:hover { transform: rotate(180deg); }
+
+    /* ── Chart range comparison overlay ── */
+    #comparison-bar {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 12px 16px;
+      border-top: 1px solid var(--card-border);
+      flex-wrap: wrap;
+    }
+    #comparison-bar.visible { display: flex; }
+    .cmp-label {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+    .cmp-chip {
+      font-size: 15px;
+      font-weight: 800;
+      padding: 5px 14px;
+      border-radius: 50px;
+      font-variant-numeric: tabular-nums;
+    }
+    .cmp-chip.up   { color: var(--up);   background: var(--up-bg); }
+    .cmp-chip.down { color: var(--down); background: var(--down-bg); }
+    .cmp-hint {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-align: center;
+      padding: 6px 16px 10px;
+      border-top: 1px solid var(--card-border);
+    }
+    /* drag crosshair lines on chart */
+    #chart-drag-overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 2;
+    }
+
     /* ── Footer ── */
     footer {
       text-align: center;
@@ -508,6 +632,27 @@
       </div>
     </section>
 
+    <!-- Currency Converter -->
+    <div class="card converter-card">
+      <div class="converter-inner">
+        <div class="converter-header">
+          <span class="converter-title">Convertisseur</span>
+          <span class="converter-rate-badge" id="conv-rate-badge">Chargement…</span>
+        </div>
+        <div class="converter-inputs">
+          <div class="converter-field">
+            <div class="converter-label"><span class="flag">🇪🇺</span> EUR</div>
+            <input id="conv-eur" class="converter-input" type="number" inputmode="decimal" placeholder="0.00" min="0" />
+          </div>
+          <button class="converter-swap" id="conv-swap" title="Inverser">⇄</button>
+          <div class="converter-field">
+            <div class="converter-label"><span class="flag">🇦🇷</span> ARS</div>
+            <input id="conv-ars" class="converter-input" type="number" inputmode="decimal" placeholder="0" min="0" />
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Chart card -->
     <div class="card">
       <!-- Range selector -->
@@ -535,10 +680,18 @@
       <!-- Chart -->
       <div class="chart-wrap">
         <canvas id="chart"></canvas>
+        <canvas id="chart-drag-overlay"></canvas>
         <div class="chart-overlay visible" id="chart-overlay">
           <div class="spinner"></div>
         </div>
       </div>
+      <!-- Two-point comparison result -->
+      <div id="comparison-bar">
+        <span class="cmp-label">Écart sélectionné :</span>
+        <span class="cmp-chip" id="cmp-chip"></span>
+        <span class="cmp-label" id="cmp-abs"></span>
+      </div>
+      <div class="cmp-hint" id="cmp-hint">🖱️ Glisse sur le graphique pour comparer deux points · 📱 Touche deux points simultanément</div>
 
       <!-- Stats -->
       <div class="stats-bar">
@@ -589,19 +742,30 @@
     let currentRange = '1D';
     let chart = null;
     let refreshTimer = null;
+    let currentRate = null;
+    let currentChartPoints = [];
 
     /* ── DOM refs ── */
-    const heroRate    = document.getElementById('hero-rate');
-    const heroChange  = document.getElementById('hero-change');
-    const heroTime    = document.getElementById('hero-time');
-    const chartCanvas = document.getElementById('chart');
-    const chartOverlay= document.getElementById('chart-overlay');
-    const statMin     = document.getElementById('stat-min');
-    const statMax     = document.getElementById('stat-max');
-    const statAvg     = document.getElementById('stat-avg');
-    const footerTs    = document.getElementById('footer-ts');
-    const errorToast  = document.getElementById('error-toast');
-    const rangeBtns   = document.querySelectorAll('.range-btn');
+    const heroRate      = document.getElementById('hero-rate');
+    const heroChange    = document.getElementById('hero-change');
+    const heroTime      = document.getElementById('hero-time');
+    const chartCanvas   = document.getElementById('chart');
+    const dragCanvas    = document.getElementById('chart-drag-overlay');
+    const chartOverlay  = document.getElementById('chart-overlay');
+    const statMin       = document.getElementById('stat-min');
+    const statMax       = document.getElementById('stat-max');
+    const statAvg       = document.getElementById('stat-avg');
+    const footerTs      = document.getElementById('footer-ts');
+    const errorToast    = document.getElementById('error-toast');
+    const rangeBtns     = document.querySelectorAll('.range-btn');
+    const convEur       = document.getElementById('conv-eur');
+    const convArs       = document.getElementById('conv-ars');
+    const convSwap      = document.getElementById('conv-swap');
+    const convBadge     = document.getElementById('conv-rate-badge');
+    const compBar       = document.getElementById('comparison-bar');
+    const cmpChip       = document.getElementById('cmp-chip');
+    const cmpAbs        = document.getElementById('cmp-abs');
+    const cmpHint       = document.getElementById('cmp-hint');
 
     /* ── Helpers ── */
     function fmtRate(r) {
@@ -763,6 +927,158 @@
       });
     }
 
+    /* ── Converter logic ── */
+    function updateConverter(rate) {
+      currentRate = rate;
+      convBadge.textContent = '1 € = ' + fmtRate(rate) + ' ARS';
+    }
+
+    convEur.addEventListener('input', () => {
+      if (!currentRate) return;
+      const v = parseFloat(convEur.value);
+      convArs.value = isNaN(v) ? '' : Math.round(v * currentRate).toString();
+    });
+
+    convArs.addEventListener('input', () => {
+      if (!currentRate) return;
+      const v = parseFloat(convArs.value);
+      convEur.value = isNaN(v) ? '' : (v / currentRate).toFixed(2);
+    });
+
+    convSwap.addEventListener('click', () => {
+      const tmpE = convEur.value;
+      const tmpA = convArs.value;
+      convSwap.style.transform = 'rotate(360deg)';
+      setTimeout(() => convSwap.style.transform = '', 400);
+      convEur.value = tmpA && currentRate ? (parseFloat(tmpA) / currentRate).toFixed(2) : tmpA;
+      convArs.value = tmpE && currentRate ? Math.round(parseFloat(tmpE) * currentRate).toString() : tmpE;
+    });
+
+    /* ── Two-point chart comparison ── */
+    const dragCtx = dragCanvas.getContext('2d');
+
+    function syncDragCanvas() {
+      dragCanvas.width  = chartCanvas.width;
+      dragCanvas.height = chartCanvas.height;
+      dragCanvas.style.width  = chartCanvas.style.width  || chartCanvas.offsetWidth  + 'px';
+      dragCanvas.style.height = chartCanvas.style.height || chartCanvas.offsetHeight + 'px';
+    }
+
+    function getChartIndexFromX(clientX) {
+      if (!chart || !currentChartPoints.length) return null;
+      const rect  = chartCanvas.getBoundingClientRect();
+      const relX  = clientX - rect.left;
+      const area  = chart.chartArea;
+      const pct   = Math.max(0, Math.min(1, (relX - area.left) / (area.right - area.left)));
+      return Math.round(pct * (currentChartPoints.length - 1));
+    }
+
+    function drawCompareLines(idxA, idxB) {
+      if (!chart) return;
+      syncDragCanvas();
+      const area = chart.chartArea;
+      const n    = currentChartPoints.length;
+      const xA   = area.left + (idxA / (n - 1)) * (area.right - area.left);
+      const xB   = area.left + (idxB / (n - 1)) * (area.right - area.left);
+      const rA   = currentChartPoints[idxA];
+      const rB   = currentChartPoints[idxB];
+      const yMin = chart.scales.y.getPixelForValue(chart.scales.y.min);
+      const yMax = chart.scales.y.getPixelForValue(chart.scales.y.max);
+      const isUp = rB >= rA;
+      const col  = isUp
+        ? (darkMode ? 'rgba(0,230,118,0.85)' : 'rgba(0,169,79,0.85)')
+        : (darkMode ? 'rgba(255,23,68,0.85)'  : 'rgba(213,0,50,0.85)');
+
+      dragCtx.clearRect(0, 0, dragCanvas.width, dragCanvas.height);
+
+      [xA, xB].forEach(x => {
+        dragCtx.beginPath();
+        dragCtx.setLineDash([4, 4]);
+        dragCtx.strokeStyle = col;
+        dragCtx.lineWidth = 1.5;
+        dragCtx.moveTo(x, yMax);
+        dragCtx.lineTo(x, yMin);
+        dragCtx.stroke();
+        dragCtx.setLineDash([]);
+      });
+
+      // Horizontal connector
+      const yA = chart.scales.y.getPixelForValue(rA);
+      const yB = chart.scales.y.getPixelForValue(rB);
+      const yMid = (yA + yB) / 2;
+      dragCtx.beginPath();
+      dragCtx.strokeStyle = col;
+      dragCtx.lineWidth = 1;
+      dragCtx.setLineDash([3, 5]);
+      dragCtx.moveTo(xA, yMid);
+      dragCtx.lineTo(xB, yMid);
+      dragCtx.stroke();
+      dragCtx.setLineDash([]);
+
+      const diff   = rB - rA;
+      const pct    = ((diff / rA) * 100);
+      const sign   = diff >= 0 ? '+' : '';
+      const cls    = diff >= 0 ? 'up' : 'down';
+      cmpChip.textContent = sign + pct.toFixed(2) + '%';
+      cmpChip.className   = 'cmp-chip ' + cls;
+      cmpAbs.textContent  = sign + fmtRate(Math.abs(diff)) + ' ARS';
+      compBar.classList.add('visible');
+    }
+
+    function clearCompare() {
+      if (dragCtx) dragCtx.clearRect(0, 0, dragCanvas.width, dragCanvas.height);
+      compBar.classList.remove('visible');
+    }
+
+    /* Mouse drag */
+    let dragStart = null;
+    chartCanvas.addEventListener('mousedown', e => {
+      dragStart = getChartIndexFromX(e.clientX);
+    });
+    chartCanvas.addEventListener('mousemove', e => {
+      if (dragStart === null) return;
+      const idx = getChartIndexFromX(e.clientX);
+      if (idx !== null && idx !== dragStart) drawCompareLines(dragStart, idx);
+    });
+    chartCanvas.addEventListener('mouseup', e => {
+      const idx = getChartIndexFromX(e.clientX);
+      if (dragStart !== null && idx !== null && idx !== dragStart) {
+        drawCompareLines(dragStart, idx);
+      } else {
+        clearCompare();
+      }
+      dragStart = null;
+    });
+    chartCanvas.addEventListener('mouseleave', () => {
+      if (dragStart !== null) { dragStart = null; }
+    });
+
+    /* Touch (2-finger pinch) */
+    let touch1Idx = null, touch2Idx = null;
+    chartCanvas.addEventListener('touchstart', e => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        touch1Idx = getChartIndexFromX(e.touches[0].clientX);
+        touch2Idx = getChartIndexFromX(e.touches[1].clientX);
+        if (touch1Idx !== null && touch2Idx !== null)
+          drawCompareLines(Math.min(touch1Idx, touch2Idx), Math.max(touch1Idx, touch2Idx));
+      } else {
+        clearCompare();
+      }
+    }, { passive: false });
+    chartCanvas.addEventListener('touchmove', e => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        touch1Idx = getChartIndexFromX(e.touches[0].clientX);
+        touch2Idx = getChartIndexFromX(e.touches[1].clientX);
+        if (touch1Idx !== null && touch2Idx !== null)
+          drawCompareLines(Math.min(touch1Idx, touch2Idx), Math.max(touch1Idx, touch2Idx));
+      }
+    }, { passive: false });
+    chartCanvas.addEventListener('touchend', () => {
+      touch1Idx = null; touch2Idx = null;
+    });
+
     /* ── Format chart label ── */
     function fmtLabel(iso, days) {
       const d = new Date(iso);
@@ -784,6 +1100,10 @@
       const pct     = calcPct(points);
       const isUp    = pct === null ? true : pct >= 0;
 
+      currentChartPoints = values;
+      clearCompare();
+      syncDragCanvas();
+
       if (points.length < 2) {
         if (!chart) {
           chartOverlay.classList.add('visible');
@@ -792,6 +1112,7 @@
       } else {
         chartOverlay.innerHTML = '<div class="spinner"></div>';
         initChart(labels, values, isUp);
+        setTimeout(syncDragCanvas, 700); // after animation
       }
 
       /* Stats */
@@ -854,6 +1175,8 @@
       footerTs.textContent = 'Dernière MAJ : ' + new Date(latest.timestamp).toLocaleString('fr-FR', {
         day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
       });
+
+      updateConverter(latest.rate);
     }
 
     /* ── Fetch & refresh ── */

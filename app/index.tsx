@@ -15,6 +15,7 @@ import { RateCard } from '../components/RateCard';
 import { MiniChart } from '../components/MiniChart';
 import { AlertModal } from '../components/AlertModal';
 import { ThemeToggle } from '../components/ThemeToggle';
+import { CurrencyConverter } from '../components/CurrencyConverter';
 import { useRateFetcher } from '../hooks/useRateFetcher';
 import { fetchCurrentRate } from '../services/api';
 
@@ -107,6 +108,11 @@ export default function HomeScreen() {
           isLoading={isLoading}
           theme={theme}
         />
+
+        <View style={styles.gap} />
+
+        {/* Currency Converter */}
+        <CurrencyConverter rate={currentRate} theme={theme} />
 
         <View style={styles.gap} />
 
