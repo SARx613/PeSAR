@@ -177,7 +177,7 @@
       z-index: 1;
       max-width: 860px;
       margin: 0 auto;
-      padding: 32px 20px 60px;
+      padding: calc(32px + env(safe-area-inset-top)) 20px calc(60px + env(safe-area-inset-bottom));
     }
 
     /* ── Header ── */
@@ -587,7 +587,7 @@
 
     /* ── Responsive ── */
     @media (max-width: 480px) {
-      .wrapper { padding: 20px 14px 50px; }
+      .wrapper { padding: calc(20px + env(safe-area-inset-top)) 14px calc(50px + env(safe-area-inset-bottom)); }
       header { margin-bottom: 24px; }
       .hero { margin-bottom: 28px; }
       .stats-bar { grid-template-columns: repeat(3, 1fr); }
