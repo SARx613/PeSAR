@@ -587,13 +587,15 @@
 
     /* ── Responsive ── */
     @media (max-width: 480px) {
-      .wrapper { padding: calc(20px + env(safe-area-inset-top)) 14px calc(50px + env(safe-area-inset-bottom)); }
-      header { margin-bottom: 24px; }
-      .hero { margin-bottom: 28px; }
+      .wrapper { padding: calc(16px + env(safe-area-inset-top)) 12px calc(24px + env(safe-area-inset-bottom)); }
+      header { margin-bottom: 16px; }
+      .hero { margin-bottom: 16px; }
+      .converter-card { margin-bottom: 16px; }
+      .converter-inner { padding: 16px 16px; }
       .stats-bar { grid-template-columns: repeat(3, 1fr); }
-      .stat-item { padding: 12px 10px; }
-      .stat-value { font-size: 14px; }
-      .chart-wrap canvas { max-height: 220px; }
+      .stat-item { padding: 10px 6px; }
+      .stat-value { font-size: 13px; }
+      .chart-wrap canvas { max-height: 170px; }
     }
     @media (max-width: 360px) {
       .stats-bar { grid-template-columns: 1fr 1fr; }
@@ -949,6 +951,8 @@
     function updateConverter(rate) {
       currentRate = rate;
       convBadge.textContent = '1 € = ' + fmtRate(rate) + ' ARS';
+      convEur.placeholder = '50';
+      convArs.placeholder = Math.round(50 * rate).toString();
     }
 
     convEur.addEventListener('input', () => {
