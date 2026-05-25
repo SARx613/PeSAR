@@ -666,10 +666,10 @@
     <div class="card">
       <!-- Range selector -->
       <div class="range-bar" id="range-bar">
-        <button class="range-btn active" data-range="1D">
+        <button class="range-btn" data-range="1D">
           1J <span class="range-pct loading-pct" id="pct-1D">&nbsp;&nbsp;&nbsp;&nbsp;</span>
         </button>
-        <button class="range-btn" data-range="1W">
+        <button class="range-btn active" data-range="1W">
           1S <span class="range-pct loading-pct" id="pct-1W">&nbsp;&nbsp;&nbsp;&nbsp;</span>
         </button>
         <button class="range-btn" data-range="1M">
@@ -748,7 +748,7 @@
 
     /* ── State ── */
     let allHistory = [];
-    let currentRange = '1D';
+    let currentRange = '1W';
     let chart = null;
     let refreshTimer = null;
     let currentRate = null;
