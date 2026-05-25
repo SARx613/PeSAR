@@ -551,13 +551,6 @@
     }
     .cmp-chip.up   { color: var(--up);   background: var(--up-bg); }
     .cmp-chip.down { color: var(--down); background: var(--down-bg); }
-    .cmp-hint {
-      font-size: 11px;
-      color: var(--text-muted);
-      text-align: center;
-      padding: 6px 16px 10px;
-      border-top: 1px solid var(--card-border);
-    }
     /* drag crosshair lines on chart — positioned via JS to align exactly with chartCanvas */
     #chart-drag-overlay {
       position: absolute;
@@ -711,7 +704,6 @@
         <span class="cmp-chip" id="cmp-chip"></span>
         <span class="cmp-label" id="cmp-abs"></span>
       </div>
-      <div class="cmp-hint" id="cmp-hint">🖱️ Glisse sur le graphique pour comparer deux points · 📱 Touche deux points simultanément</div>
 
       <!-- Stats -->
       <div class="stats-bar">
@@ -785,7 +777,6 @@
     const compBar       = document.getElementById('comparison-bar');
     const cmpChip       = document.getElementById('cmp-chip');
     const cmpAbs        = document.getElementById('cmp-abs');
-    const cmpHint       = document.getElementById('cmp-hint');
 
     /* ── Helpers ── */
     function fmtRate(r) {
