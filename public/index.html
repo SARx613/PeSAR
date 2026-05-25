@@ -364,6 +364,8 @@
     .chart-wrap {
       padding: 20px 16px 8px;
       position: relative;
+      user-select: none;
+      -webkit-user-select: none;
     }
     .chart-wrap canvas { max-height: 280px; }
 
@@ -539,10 +541,9 @@
       padding: 6px 16px 10px;
       border-top: 1px solid var(--card-border);
     }
-    /* drag crosshair lines on chart */
+    /* drag crosshair lines on chart — positioned via JS to align exactly with chartCanvas */
     #chart-drag-overlay {
       position: absolute;
-      inset: 0;
       pointer-events: none;
       z-index: 2;
     }
@@ -958,10 +959,22 @@
     const dragCtx = dragCanvas.getContext('2d');
 
     function syncDragCanvas() {
-      dragCanvas.width  = chartCanvas.width;
-      dragCanvas.height = chartCanvas.height;
-      dragCanvas.style.width  = chartCanvas.style.width  || chartCanvas.offsetWidth  + 'px';
-      dragCanvas.style.height = chartCanvas.style.height || chartCanvas.offsetHeight + 'px';
+      // Position dragCanvas exactly over chartCanvas (not chart-wrap)
+      const chartRect = chartCanvas.getBoundingClientRect();
+      const wrapRect  = chartCanvas.parentElement.getBoundingClientRect();
+      const offLeft   = chartRect.left - wrapRect.left;
+      const offTop    = chartRect.top  - wrapRect.top;
+      const cssW      = chartRect.width;
+      const cssH      = chartRect.height;
+      dragCanvas.style.left   = offLeft + 'px';
+      dragCanvas.style.top    = offTop  + 'px';
+      dragCanvas.style.width  = cssW    + 'px';
+      dragCanvas.style.height = cssH    + 'px';
+      // Physical pixels (device pixel ratio)
+      const dpr = window.devicePixelRatio || 1;
+      dragCanvas.width  = Math.round(cssW * dpr);
+      dragCanvas.height = Math.round(cssH * dpr);
+      dragCtx.scale(dpr, dpr);
     }
 
     function getChartIndexFromX(clientX) {
@@ -975,36 +988,42 @@
 
     function drawCompareLines(idxA, idxB) {
       if (!chart) return;
+      // syncDragCanvas resets the transform — must be called before drawing
       syncDragCanvas();
+
       const area = chart.chartArea;
       const n    = currentChartPoints.length;
-      const xA   = area.left + (idxA / (n - 1)) * (area.right - area.left);
-      const xB   = area.left + (idxB / (n - 1)) * (area.right - area.left);
+      // chart.chartArea coords are in CSS pixels relative to chartCanvas
+      // dragCanvas is now positioned & scaled to match chartCanvas exactly
+      const xA   = area.left + (idxA / (n - 1)) * (area.right  - area.left);
+      const xB   = area.left + (idxB / (n - 1)) * (area.right  - area.left);
       const rA   = currentChartPoints[idxA];
       const rB   = currentChartPoints[idxB];
-      const yMin = chart.scales.y.getPixelForValue(chart.scales.y.min);
-      const yMax = chart.scales.y.getPixelForValue(chart.scales.y.max);
+      const yTop = chart.chartArea.top;
+      const yBot = chart.chartArea.bottom;
+      const yA   = chart.scales.y.getPixelForValue(rA);
+      const yB   = chart.scales.y.getPixelForValue(rB);
       const isUp = rB >= rA;
       const col  = isUp
-        ? (darkMode ? 'rgba(0,230,118,0.85)' : 'rgba(0,169,79,0.85)')
-        : (darkMode ? 'rgba(255,23,68,0.85)'  : 'rgba(213,0,50,0.85)');
+        ? (darkMode ? 'rgba(0,230,118,0.9)' : 'rgba(0,169,79,0.9)')
+        : (darkMode ? 'rgba(255,23,68,0.9)'  : 'rgba(213,0,50,0.9)');
 
+      // Clear (dragCanvas.width/height are physical px; scale() handles the rest)
       dragCtx.clearRect(0, 0, dragCanvas.width, dragCanvas.height);
 
+      // Vertical dashed lines
       [xA, xB].forEach(x => {
         dragCtx.beginPath();
-        dragCtx.setLineDash([4, 4]);
+        dragCtx.setLineDash([5, 4]);
         dragCtx.strokeStyle = col;
         dragCtx.lineWidth = 1.5;
-        dragCtx.moveTo(x, yMax);
-        dragCtx.lineTo(x, yMin);
+        dragCtx.moveTo(x, yTop);
+        dragCtx.lineTo(x, yBot);
         dragCtx.stroke();
         dragCtx.setLineDash([]);
       });
 
-      // Horizontal connector
-      const yA = chart.scales.y.getPixelForValue(rA);
-      const yB = chart.scales.y.getPixelForValue(rB);
+      // Horizontal dashed connector at mid-height
       const yMid = (yA + yB) / 2;
       dragCtx.beginPath();
       dragCtx.strokeStyle = col;
@@ -1015,10 +1034,18 @@
       dragCtx.stroke();
       dragCtx.setLineDash([]);
 
-      const diff   = rB - rA;
-      const pct    = ((diff / rA) * 100);
-      const sign   = diff >= 0 ? '+' : '';
-      const cls    = diff >= 0 ? 'up' : 'down';
+      // Dot markers on the line
+      [{ x: xA, y: yA }, { x: xB, y: yB }].forEach(({ x, y }) => {
+        dragCtx.beginPath();
+        dragCtx.arc(x, y, 4, 0, Math.PI * 2);
+        dragCtx.fillStyle = col;
+        dragCtx.fill();
+      });
+
+      const diff = rB - rA;
+      const pct  = (diff / rA) * 100;
+      const sign = diff >= 0 ? '+' : '';
+      const cls  = diff >= 0 ? 'up' : 'down';
       cmpChip.textContent = sign + pct.toFixed(2) + '%';
       cmpChip.className   = 'cmp-chip ' + cls;
       cmpAbs.textContent  = sign + fmtRate(Math.abs(diff)) + ' ARS';
@@ -1030,9 +1057,14 @@
       compBar.classList.remove('visible');
     }
 
+    /* Prevent text selection while dragging on chart */
+    chartCanvas.addEventListener('selectstart', e => e.preventDefault());
+    chartCanvas.addEventListener('mousedown',   e => e.preventDefault());
+
     /* Mouse drag */
     let dragStart = null;
     chartCanvas.addEventListener('mousedown', e => {
+      e.preventDefault(); // already above, but belt-and-suspenders
       dragStart = getChartIndexFromX(e.clientX);
     });
     chartCanvas.addEventListener('mousemove', e => {
@@ -1050,7 +1082,7 @@
       dragStart = null;
     });
     chartCanvas.addEventListener('mouseleave', () => {
-      if (dragStart !== null) { dragStart = null; }
+      dragStart = null;
     });
 
     /* Touch (2-finger pinch) */
