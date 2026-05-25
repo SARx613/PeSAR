@@ -1243,6 +1243,12 @@
 
         if (!histData.ok || !latestData.ok) throw new Error('Données invalides');
 
+        // Sauvegarde dans le cache
+        try {
+          localStorage.setItem('pesar_history', JSON.stringify(histData.history || []));
+          localStorage.setItem('pesar_latest', JSON.stringify(latestData));
+        } catch (e) { console.warn('Cache write error', e); }
+
         /* Sort history ascending by timestamp */
         allHistory = (histData.history || []).sort(
           (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
@@ -1258,9 +1264,11 @@
         renderRange(currentRange);
 
       } catch (err) {
-        showError('Erreur de chargement des données');
-        chartOverlay.innerHTML = '<div class="chart-empty-msg">Impossible de charger les données</div>';
-        chartOverlay.classList.add('visible');
+        if (!allHistory.length) {
+          showError('Erreur de chargement des données');
+          chartOverlay.innerHTML = '<div class="chart-empty-msg">Impossible de charger les données</div>';
+          chartOverlay.classList.add('visible');
+        }
         console.error(err);
       }
     }
@@ -1292,7 +1300,33 @@
       }
     }, 60000);
 
+    /* ── Render from cache ── */
+    function loadFromCache() {
+      try {
+        const cachedHist = localStorage.getItem('pesar_history');
+        const cachedLatest = localStorage.getItem('pesar_latest');
+        if (cachedHist && cachedLatest) {
+          const histData = JSON.parse(cachedHist);
+          const latestData = JSON.parse(cachedLatest);
+
+          allHistory = histData.sort(
+            (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
+          );
+          if (allHistory.length === 0 || new Date(latestData.timestamp) > new Date(allHistory[allHistory.length - 1].timestamp)) {
+            allHistory.push({ rate: latestData.rate, timestamp: latestData.timestamp });
+          }
+
+          updateHero(latestData);
+          updateBadges();
+          renderRange(currentRange);
+        }
+      } catch (e) {
+        console.warn('Erreur lecture cache', e);
+      }
+    }
+
     /* ── Init ── */
+    loadFromCache();
     fetchData().then(scheduleRefresh);
 
   })();
