@@ -88,6 +88,14 @@
 
     html { scroll-behavior: smooth; }
 
+    /* ── Hide scrollbar everywhere, keep scroll functional ── */
+    html, body {
+      scrollbar-width: none;        /* Firefox */
+      -ms-overflow-style: none;     /* IE / Edge legacy */
+    }
+    html::-webkit-scrollbar,
+    body::-webkit-scrollbar { display: none; } /* Chrome / Safari / WebKit */
+
     body {
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
       background: var(--bg);
