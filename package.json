@@ -12,7 +12,8 @@
     "build:ios": "eas build --platform ios --profile production",
     "build:ios:preview": "eas build --platform ios --profile preview",
     "submit:ios": "eas submit --platform ios",
-    "vercel:deploy": "vercel deploy --prod"
+    "vercel:deploy": "vercel deploy --prod",
+    "update:wu": "node scripts/update-wu-dataset.mjs"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
