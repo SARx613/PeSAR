@@ -1,0 +1,32 @@
+{
+  "name": "PeSAR — Taux EUR → ARS",
+  "short_name": "PeSAR",
+  "description": "Suivi du taux Western Union EUR → Peso argentin, avec convertisseur, graphique, alertes et localisation des points Western Union.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#06061a",
+  "theme_color": "#06061a",
+  "lang": "fr",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

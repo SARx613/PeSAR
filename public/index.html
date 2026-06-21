@@ -6,10 +6,12 @@
   <title>PeSAR — EUR → ARS</title>
   
   <!-- App Icon & PWA configuration for iOS -->
+  <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="PeSAR" />
-  <link rel="apple-touch-icon" href="logo-dark.png" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
   <meta name="theme-color" content="#eef2ff" media="(prefers-color-scheme: light)" />
   <meta name="theme-color" content="#06061a" media="(prefers-color-scheme: dark)" />
   
@@ -930,6 +932,57 @@
       transition: color 0.2s ease;
     }
     .alert-del:hover { color: var(--down); }
+
+    /* ── Install (PWA) view ── */
+    .install-body { padding: 20px 16px; }
+    .install-intro { text-align: center; margin-bottom: 18px; }
+    .install-done { text-align: center; padding: 24px 8px; }
+    .install-native + .install-steps { margin-top: 18px; }
+
+    .install-steps {
+      list-style: none;
+      counter-reset: step;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .install-steps li {
+      counter-increment: step;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 13px 14px;
+      font-size: 14px;
+      line-height: 1.45;
+      color: var(--text-soft);
+    }
+    .install-steps li::before {
+      content: counter(step);
+      flex-shrink: 0;
+      width: 24px; height: 24px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 1px;
+    }
+    .install-steps li b { color: var(--text); font-weight: 700; }
+    .install-ic {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px; height: 20px;
+      vertical-align: -4px;
+      margin: 0 1px;
+    }
+    .install-ic svg { width: 18px; height: 18px; }
   </style>
 </head>
 <body>
@@ -1089,6 +1142,15 @@
           </span>
           <span class="menu-item-chevron">›</span>
         </button>
+
+        <button class="menu-item" data-view="install">
+          <span class="menu-item-icon">📲</span>
+          <span class="menu-item-text">
+            <span class="menu-item-title">Installer l’app</span>
+            <span class="menu-item-desc">Ajouter PeSAR à l’écran d’accueil</span>
+          </span>
+          <span class="menu-item-chevron">›</span>
+        </button>
       </div>
 
       <!-- Western Union sub-view -->
@@ -1200,6 +1262,40 @@
           <!-- Existing alerts -->
           <div class="alert-list-head" id="alert-list-head" hidden>Mes alertes</div>
           <div id="alert-list" class="alert-list"></div>
+        </div>
+      </div>
+
+      <!-- Install (PWA) sub-view -->
+      <div class="subview" id="view-install">
+        <div class="panel-head">
+          <button class="panel-back" data-back>‹ Retour</button>
+          <button class="panel-close" data-close aria-label="Fermer">✕</button>
+        </div>
+
+        <div class="install-body">
+          <!-- Already installed -->
+          <div id="install-done" class="install-done" hidden>
+            <div class="alert-perm-icon">✅</div>
+            <div class="alert-perm-title">PeSAR est déjà installé</div>
+            <div class="alert-perm-desc">Tu utilises l’app depuis l’écran d’accueil. Les notifications sont disponibles.</div>
+          </div>
+
+          <!-- Install intro + steps (filled per-platform by JS) -->
+          <div id="install-guide">
+            <div class="install-intro">
+              <div class="alert-perm-icon">📲</div>
+              <div class="alert-perm-title" id="install-title">Installer PeSAR</div>
+              <div class="alert-perm-desc" id="install-lead">
+                Ajoute PeSAR à ton écran d’accueil pour l’ouvrir comme une vraie app —
+                plein écran, plus rapide, et nécessaire pour recevoir les notifications.
+              </div>
+            </div>
+
+            <!-- Native install button (Android/Chrome/desktop) -->
+            <button class="wu-locate-btn" id="install-native" hidden>Installer l’app</button>
+
+            <ol class="install-steps" id="install-steps"></ol>
+          </div>
         </div>
       </div>
     </div>
@@ -1827,10 +1923,17 @@
       panel.setAttribute('aria-hidden', 'true');
       document.body.style.overflow = '';
     }
-    const viewAlerts = document.getElementById('view-alerts');
+    const viewAlerts  = document.getElementById('view-alerts');
+    const viewInstall = document.getElementById('view-install');
+    function anySubviewOpen() {
+      return viewWu.classList.contains('active') ||
+             viewAlerts.classList.contains('active') ||
+             viewInstall.classList.contains('active');
+    }
     function showRoot() {
       viewWu.classList.remove('active');
       viewAlerts.classList.remove('active');
+      viewInstall.classList.remove('active');
       menuList.classList.remove('hidden');
       headRoot.style.display = '';
     }
@@ -1843,6 +1946,9 @@
       } else if (id === 'alerts') {
         viewAlerts.classList.add('active');
         if (window.PeSARAlerts) window.PeSARAlerts.open();
+      } else if (id === 'install') {
+        viewInstall.classList.add('active');
+        renderInstallGuide();
       }
     }
 
@@ -1850,8 +1956,90 @@
     overlay.addEventListener('click', closePanel);
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape' && panel.classList.contains('open')) {
-        viewWu.classList.contains('active') ? showRoot() : closePanel();
+        anySubviewOpen() ? showRoot() : closePanel();
       }
+    });
+
+    /* ── PWA install guide ── */
+    // Capture the install prompt as early as possible (fires on page load).
+    let deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', e => {
+      e.preventDefault();
+      deferredPrompt = e;
+      const btn = document.getElementById('install-native');
+      if (btn) btn.hidden = false;
+    });
+    window.addEventListener('appinstalled', () => {
+      deferredPrompt = null;
+      if (viewInstall.classList.contains('active')) renderInstallGuide();
+    });
+
+    function isStandalone() {
+      return window.matchMedia('(display-mode: standalone)').matches ||
+             window.navigator.standalone === true;
+    }
+
+    const shareIcon =
+      '<span class="install-ic"><svg viewBox="0 0 24 24" fill="none" stroke="#2979ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M8 8l4-4 4 4"/><path d="M5 12v7a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-7"/></svg></span>';
+    const dotsIcon =
+      '<span class="install-ic"><svg viewBox="0 0 24 24" fill="#2979ff"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></span>';
+
+    function platformSteps() {
+      const ua = navigator.userAgent || '';
+      const iOS = /iPad|iPhone|iPod/.test(ua) ||
+                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      const android = /Android/.test(ua);
+
+      if (iOS) {
+        const safari = /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua);
+        return [
+          !safari ? 'Ouvre cette page dans <b>Safari</b> (l’installation ne marche pas depuis Chrome sur iPhone).' : null,
+          'Appuie sur le bouton <b>Partager</b> ' + shareIcon + ' en bas de l’écran.',
+          'Fais défiler et choisis <b>« Sur l’écran d’accueil »</b>.',
+          'Appuie sur <b>« Ajouter »</b> en haut à droite.',
+          'Ouvre PeSAR depuis l’icône sur ton écran d’accueil — c’est prêt ✅',
+        ].filter(Boolean);
+      }
+      if (android) {
+        return [
+          'Appuie sur le menu <b>⋮</b> ' + dotsIcon + ' en haut à droite de Chrome.',
+          'Choisis <b>« Installer l’application »</b> (ou « Ajouter à l’écran d’accueil »).',
+          'Confirme avec <b>« Installer »</b>.',
+          'Ouvre PeSAR depuis ton écran d’accueil ✅',
+        ];
+      }
+      // Desktop
+      return [
+        'Clique sur l’icône d’installation ⊕ dans la barre d’adresse du navigateur.',
+        'Ou ouvre le menu du navigateur puis <b>« Installer PeSAR »</b>.',
+        'Confirme l’installation ✅',
+      ];
+    }
+
+    function renderInstallGuide() {
+      const done    = document.getElementById('install-done');
+      const guide   = document.getElementById('install-guide');
+      const stepsEl = document.getElementById('install-steps');
+      const nativeBtn = document.getElementById('install-native');
+
+      if (isStandalone()) {
+        done.hidden = false;
+        guide.hidden = true;
+        return;
+      }
+      done.hidden = true;
+      guide.hidden = false;
+
+      stepsEl.innerHTML = platformSteps().map(s => '<li>' + s + '</li>').join('');
+      nativeBtn.hidden = !deferredPrompt;
+    }
+
+    document.getElementById('install-native').addEventListener('click', async () => {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      try { await deferredPrompt.userChoice; } catch {}
+      deferredPrompt = null;
+      renderInstallGuide();
     });
     panel.addEventListener('click', e => {
       const item = e.target.closest('[data-view]');
