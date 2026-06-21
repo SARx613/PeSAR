@@ -863,6 +863,73 @@
       font-size: 14px;
     }
     .wu-state .spinner { margin: 0 auto 14px; }
+
+    /* ── Alerts view ── */
+    .alerts-body { padding: 16px; }
+    .alert-perm {
+      text-align: center;
+      padding: 20px 8px 24px;
+    }
+    .alert-perm-icon { font-size: 40px; margin-bottom: 10px; }
+    .alert-perm-title { font-size: 16px; font-weight: 800; margin-bottom: 8px; }
+    .alert-perm-desc {
+      font-size: 13px; color: var(--text-muted);
+      line-height: 1.5; margin-bottom: 18px;
+    }
+
+    .alert-form { display: flex; flex-direction: column; gap: 14px; }
+    .alert-field { display: flex; flex-direction: column; gap: 7px; }
+    .alert-row {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    }
+    .alert-select, .alert-input {
+      background: rgba(255,255,255,0.05);
+      border: 1.5px solid var(--card-border);
+      border-radius: 11px;
+      padding: 10px 12px;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.2s ease;
+    }
+    @media (prefers-color-scheme: light) {
+      .alert-select, .alert-input { background: rgba(10,10,46,0.04); }
+    }
+    .alert-select { flex: 1; cursor: pointer; min-width: 90px; }
+    .alert-input { width: 90px; text-align: right; font-variant-numeric: tabular-nums; }
+    .alert-input.full { width: 100%; text-align: left; }
+    .alert-select:focus, .alert-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+    .alert-unit { font-size: 13px; color: var(--text-muted); font-weight: 600; }
+
+    .alert-list-head {
+      font-size: 12px; font-weight: 800; letter-spacing: 0.8px;
+      text-transform: uppercase; color: var(--text-muted);
+      margin: 22px 0 10px;
+    }
+    .alert-list { display: flex; flex-direction: column; gap: 8px; }
+    .alert-card {
+      display: flex; align-items: center; gap: 12px;
+      padding: 13px;
+      border-radius: 12px;
+      border: 1px solid var(--card-border);
+      background: var(--card);
+    }
+    .alert-card-icon { font-size: 18px; flex-shrink: 0; }
+    .alert-card-text { flex: 1; min-width: 0; }
+    .alert-card-title { font-size: 14px; font-weight: 700; }
+    .alert-card-sub { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
+    .alert-del {
+      background: none; border: none; cursor: pointer;
+      color: var(--text-muted); font-size: 20px; line-height: 1;
+      padding: 4px 8px; flex-shrink: 0;
+      transition: color 0.2s ease;
+    }
+    .alert-del:hover { color: var(--down); }
   </style>
 </head>
 <body>
@@ -1014,13 +1081,13 @@
           <span class="menu-item-chevron">›</span>
         </button>
 
-        <button class="menu-item" disabled style="cursor:default;opacity:0.7">
+        <button class="menu-item" data-view="alerts">
           <span class="menu-item-icon">🔔</span>
           <span class="menu-item-text">
             <span class="menu-item-title">Alertes de taux</span>
             <span class="menu-item-desc">Être notifié selon des conditions de prix</span>
           </span>
-          <span class="menu-soon">Bientôt</span>
+          <span class="menu-item-chevron">›</span>
         </button>
       </div>
 
@@ -1045,6 +1112,95 @@
         <div id="wu-map"></div>
 
         <div class="wu-results" id="wu-results"></div>
+      </div>
+
+      <!-- Alerts sub-view -->
+      <div class="subview" id="view-alerts">
+        <div class="panel-head">
+          <button class="panel-back" data-back>‹ Retour</button>
+          <button class="panel-close" data-close aria-label="Fermer">✕</button>
+        </div>
+
+        <div class="alerts-body">
+          <!-- Permission gate -->
+          <div id="alert-permission" class="alert-perm">
+            <div class="alert-perm-icon">🔔</div>
+            <div class="alert-perm-title">Active les notifications</div>
+            <div class="alert-perm-desc">
+              Pour recevoir les alertes même quand l’app est fermée, autorise les notifications.
+              Sur iPhone, ajoute d’abord PeSAR à ton écran d’accueil.
+            </div>
+            <button class="wu-locate-btn" id="alert-enable">Autoriser les notifications</button>
+          </div>
+
+          <!-- Create form -->
+          <form id="alert-form" class="alert-form" hidden>
+            <div class="alert-field">
+              <label class="converter-label">Type d’alerte</label>
+              <select id="al-type" class="alert-select">
+                <option value="threshold">Seuil de prix</option>
+                <option value="percent">Variation en %</option>
+                <option value="extreme">Plus haut / plus bas</option>
+              </select>
+            </div>
+
+            <!-- threshold -->
+            <div class="alert-field alert-cond" data-cond="threshold">
+              <label class="converter-label">Condition</label>
+              <div class="alert-row">
+                <select id="al-direction" class="alert-select">
+                  <option value="above">1 € dépasse</option>
+                  <option value="below">1 € descend sous</option>
+                </select>
+                <input id="al-value" class="alert-input" type="number" inputmode="decimal" placeholder="1300" min="0" />
+                <span class="alert-unit">ARS</span>
+              </div>
+            </div>
+
+            <!-- percent -->
+            <div class="alert-field alert-cond" data-cond="percent" hidden>
+              <label class="converter-label">Condition</label>
+              <div class="alert-row">
+                <span class="alert-unit">Bouge de</span>
+                <input id="al-percent" class="alert-input" type="number" inputmode="decimal" placeholder="2" min="0" step="0.1" />
+                <span class="alert-unit">% sur</span>
+                <select id="al-window-pct" class="alert-select">
+                  <option value="1D">jour</option>
+                  <option value="1W">semaine</option>
+                  <option value="1M">mois</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- extreme -->
+            <div class="alert-field alert-cond" data-cond="extreme" hidden>
+              <label class="converter-label">Condition</label>
+              <div class="alert-row">
+                <select id="al-extreme" class="alert-select">
+                  <option value="high">Atteint un plus haut</option>
+                  <option value="low">Atteint un plus bas</option>
+                </select>
+                <span class="alert-unit">sur</span>
+                <select id="al-window-ext" class="alert-select">
+                  <option value="1W">7 jours</option>
+                  <option value="1M" selected>30 jours</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="alert-field">
+              <label class="converter-label">Message (facultatif)</label>
+              <input id="al-message" class="alert-input full" type="text" maxlength="140" placeholder="Texte personnalisé de la notification" />
+            </div>
+
+            <button type="submit" class="wu-locate-btn" id="al-submit">Créer l’alerte</button>
+            <div class="wu-hint" id="al-status"></div>
+          </form>
+
+          <!-- Existing alerts -->
+          <div class="alert-list-head" id="alert-list-head" hidden>Mes alertes</div>
+          <div id="alert-list" class="alert-list"></div>
+        </div>
       </div>
     </div>
   </aside>
@@ -1671,8 +1827,10 @@
       panel.setAttribute('aria-hidden', 'true');
       document.body.style.overflow = '';
     }
+    const viewAlerts = document.getElementById('view-alerts');
     function showRoot() {
       viewWu.classList.remove('active');
+      viewAlerts.classList.remove('active');
       menuList.classList.remove('hidden');
       headRoot.style.display = '';
     }
@@ -1682,6 +1840,9 @@
       if (id === 'wu') {
         viewWu.classList.add('active');
         ensureWuLoaded();
+      } else if (id === 'alerts') {
+        viewAlerts.classList.add('active');
+        if (window.PeSARAlerts) window.PeSARAlerts.open();
       }
     }
 
@@ -1898,6 +2059,228 @@
 
     locateBtn.addEventListener('click', locate);
 
+  })();
+  </script>
+
+  <!-- ── Rate alerts (Web Push) ── -->
+  <script>
+  (() => {
+    'use strict';
+
+    const supported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+
+    /* Stable per-device id so a user sees their own alerts. */
+    function clientId() {
+      let id = localStorage.getItem('pesar_client_id');
+      if (!id) {
+        id = (crypto.randomUUID ? crypto.randomUUID() : 'c-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+        localStorage.setItem('pesar_client_id', id);
+      }
+      return id;
+    }
+
+    /* DOM */
+    const permBox   = document.getElementById('alert-permission');
+    const enableBtn = document.getElementById('alert-enable');
+    const form      = document.getElementById('alert-form');
+    const typeSel   = document.getElementById('al-type');
+    const conds     = document.querySelectorAll('.alert-cond');
+    const statusEl  = document.getElementById('al-status');
+    const listEl    = document.getElementById('alert-list');
+    const listHead  = document.getElementById('alert-list-head');
+
+    let swReg = null;
+    let opened = false;
+
+    function setStatus(msg, isErr) {
+      statusEl.textContent = msg;
+      statusEl.style.color = isErr ? 'var(--down)' : '';
+    }
+
+    /* base64url → Uint8Array for applicationServerKey */
+    function urlB64ToUint8(base64) {
+      const pad = '='.repeat((4 - (base64.length % 4)) % 4);
+      const b64 = (base64 + pad).replace(/-/g, '+').replace(/_/g, '/');
+      const raw = atob(b64);
+      return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+    }
+
+    async function getSubscription() {
+      const res = await fetch('/api/vapid-public-key');
+      const data = await res.json();
+      if (!data.ok) throw new Error('Clé VAPID indisponible côté serveur.');
+      let sub = await swReg.pushManager.getSubscription();
+      if (!sub) {
+        sub = await swReg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlB64ToUint8(data.key),
+        });
+      }
+      return sub.toJSON();
+    }
+
+    /* Show form vs permission gate based on Notification.permission */
+    function reflectPermission() {
+      const granted = Notification.permission === 'granted';
+      permBox.hidden = granted;
+      form.hidden = !granted;
+      if (granted) loadAlerts();
+    }
+
+    async function enable() {
+      if (!supported) {
+        setStatus('', false);
+        permBox.querySelector('.alert-perm-desc').textContent =
+          'Ton navigateur ne supporte pas les notifications push. Sur iPhone, ouvre PeSAR depuis l’écran d’accueil (app installée).';
+        return;
+      }
+      enableBtn.disabled = true;
+      try {
+        const perm = await Notification.requestPermission();
+        if (perm !== 'granted') {
+          enableBtn.disabled = false;
+          permBox.querySelector('.alert-perm-desc').textContent =
+            'Notifications refusées. Autorise-les dans les réglages de ton navigateur pour créer des alertes.';
+          return;
+        }
+        await getSubscription(); // subscribe now so the first alert is instant
+        reflectPermission();
+      } catch (e) {
+        console.error(e);
+        permBox.querySelector('.alert-perm-desc').textContent =
+          'Impossible d’activer les notifications. Réessaie ou vérifie que l’app est installée sur l’écran d’accueil.';
+      } finally {
+        enableBtn.disabled = false;
+      }
+    }
+
+    /* Toggle which condition block is visible */
+    function syncCondFields() {
+      conds.forEach(c => { c.hidden = c.dataset.cond !== typeSel.value; });
+    }
+
+    function buildAlertFromForm() {
+      const type = typeSel.value;
+      const message = document.getElementById('al-message').value.trim();
+      const base = message ? { message } : {};
+      if (type === 'threshold') {
+        const value = parseFloat(document.getElementById('al-value').value);
+        if (!(value > 0)) return { error: 'Entre une valeur en ARS valide.' };
+        return { alert: { type, direction: document.getElementById('al-direction').value, value, ...base } };
+      }
+      if (type === 'percent') {
+        const percent = parseFloat(document.getElementById('al-percent').value);
+        if (!(percent > 0)) return { error: 'Entre un pourcentage valide.' };
+        return { alert: { type, window: document.getElementById('al-window-pct').value, percent, ...base } };
+      }
+      // extreme
+      return { alert: { type, extreme: document.getElementById('al-extreme').value, window: document.getElementById('al-window-ext').value, ...base } };
+    }
+
+    async function createAlert(e) {
+      e.preventDefault();
+      const { alert, error } = buildAlertFromForm();
+      if (error) { setStatus(error, true); return; }
+      setStatus('Création…', false);
+      try {
+        const subscription = await getSubscription();
+        const res = await fetch('/api/alerts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'create', clientId: clientId(), subscription, alert }),
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || 'Erreur serveur');
+        setStatus('Alerte créée ✓', false);
+        document.getElementById('al-message').value = '';
+        loadAlerts();
+      } catch (err) {
+        setStatus(err.message || 'Échec de la création.', true);
+      }
+    }
+
+    function describe(a) {
+      const f = n => new Intl.NumberFormat('fr-AR', { maximumFractionDigits: 2 }).format(n);
+      if (a.type === 'threshold')
+        return { icon: '🎯', title: '1 € ' + (a.direction === 'above' ? 'dépasse ' : 'descend sous ') + f(a.value) + ' ARS' };
+      if (a.type === 'percent') {
+        const w = a.window === '1W' ? 'la semaine' : a.window === '1M' ? 'le mois' : 'la journée';
+        return { icon: '📈', title: 'Variation de ±' + f(a.percent) + '% sur ' + w };
+      }
+      const w = a.window === '1W' ? '7 j' : '30 j';
+      return { icon: a.extreme === 'high' ? '⬆️' : '⬇️', title: 'Plus ' + (a.extreme === 'high' ? 'haut' : 'bas') + ' sur ' + w };
+    }
+
+    async function loadAlerts() {
+      try {
+        const res = await fetch('/api/alerts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'list', clientId: clientId() }),
+        });
+        const data = await res.json();
+        if (!data.ok) return;
+        renderAlerts(data.alerts || []);
+      } catch (e) { console.warn('list alerts failed', e); }
+    }
+
+    function renderAlerts(alerts) {
+      listHead.hidden = alerts.length === 0;
+      listEl.innerHTML = '';
+      alerts.forEach(a => {
+        const d = describe(a);
+        const card = document.createElement('div');
+        card.className = 'alert-card';
+        card.innerHTML =
+          '<span class="alert-card-icon">' + d.icon + '</span>' +
+          '<div class="alert-card-text">' +
+            '<div class="alert-card-title"></div>' +
+            (a.message ? '<div class="alert-card-sub"></div>' : '') +
+          '</div>' +
+          '<button class="alert-del" title="Supprimer">✕</button>';
+        card.querySelector('.alert-card-title').textContent = d.title;
+        if (a.message) card.querySelector('.alert-card-sub').textContent = '“' + a.message + '”';
+        card.querySelector('.alert-del').addEventListener('click', () => deleteAlert(a.id));
+        listEl.appendChild(card);
+      });
+    }
+
+    async function deleteAlert(id) {
+      try {
+        await fetch('/api/alerts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'delete', clientId: clientId(), id }),
+        });
+        loadAlerts();
+      } catch (e) { console.warn('delete failed', e); }
+    }
+
+    /* Called when the alerts view is opened (lazy). */
+    async function open() {
+      if (!supported) {
+        permBox.querySelector('.alert-perm-desc').textContent =
+          'Ton navigateur ne supporte pas les notifications push. Sur iPhone, ajoute PeSAR à l’écran d’accueil puis rouvre-le.';
+        enableBtn.disabled = true;
+        return;
+      }
+      if (!opened) {
+        opened = true;
+        try {
+          swReg = await navigator.serviceWorker.register('/sw.js');
+          await navigator.serviceWorker.ready;
+        } catch (e) {
+          console.error('SW register failed', e);
+        }
+        typeSel.addEventListener('change', syncCondFields);
+        form.addEventListener('submit', createAlert);
+        enableBtn.addEventListener('click', enable);
+        syncCondFields();
+      }
+      reflectPermission();
+    }
+
+    window.PeSARAlerts = { open };
   })();
   </script>
 </body>

@@ -17,8 +17,17 @@
  */
 
 import { Redis } from '@upstash/redis';
+import webpush from 'web-push';
 
 const redis = Redis.fromEnv();
+
+// ─── Web Push (VAPID) — for the PWA alerts ──────────────────────────────────────
+const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY?.trim();
+const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY?.trim();
+const VAPID_SUBJECT = process.env.VAPID_SUBJECT?.trim() || 'mailto:alerts@pesar.app';
+if (VAPID_PUBLIC && VAPID_PRIVATE) {
+  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC, VAPID_PRIVATE);
+}
 
 // ─── Western Union GraphQL router (public, same endpoint as wu.com SPA) ───────
 const WU_ROUTER_URL = process.env.WU_ROUTER_URL?.trim() ?? 'https://www.westernunion.com/router/';
@@ -276,6 +285,145 @@ async function sendSilentPushToAll(rate: number, timestamp: string): Promise<voi
   }
 }
 
+// ─── Rate alerts (Web Push) ─────────────────────────────────────────────────────
+interface PushSubscription {
+  endpoint: string;
+  keys: { p256dh: string; auth: string };
+}
+interface StoredAlert {
+  id: string;
+  clientId: string;
+  type: 'threshold' | 'percent' | 'extreme';
+  direction?: 'above' | 'below';
+  value?: number;
+  window?: '1D' | '1W' | '1M';
+  percent?: number;
+  extreme?: 'high' | 'low';
+  message?: string;
+  lastTriggeredAt?: string;
+  subscription: PushSubscription;
+}
+
+const WINDOW_DAYS: Record<string, number> = { '1D': 1, '1W': 7, '1M': 30 };
+// Don't re-fire the same alert more than once per this window.
+const ALERT_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 h
+
+function fmtRate(r: number): string {
+  return new Intl.NumberFormat('fr-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(r);
+}
+
+/** Read the rolling history list and return points within `days`. */
+async function historyWithin(days: number): Promise<RatePoint[]> {
+  const raw = (await redis.lrange('rate_history', 0, -1)) as Array<string | RatePoint>;
+  const cutoff = Date.now() - days * 86400000;
+  const points: RatePoint[] = [];
+  for (const r of raw) {
+    try {
+      const p = typeof r === 'string' ? (JSON.parse(r) as RatePoint) : r;
+      if (new Date(p.timestamp).getTime() >= cutoff) points.push(p);
+    } catch {
+      /* skip malformed */
+    }
+  }
+  return points;
+}
+
+/** Decide whether an alert fires for the new rate. Returns a message or null. */
+async function evaluateAlert(a: StoredAlert, rate: number): Promise<string | null> {
+  if (a.type === 'threshold') {
+    if (a.direction === 'above' && a.value != null && rate >= a.value) {
+      return a.message || `1 € a dépassé ${fmtRate(a.value)} ARS (actuel : ${fmtRate(rate)}).`;
+    }
+    if (a.direction === 'below' && a.value != null && rate <= a.value) {
+      return a.message || `1 € est descendu sous ${fmtRate(a.value)} ARS (actuel : ${fmtRate(rate)}).`;
+    }
+    return null;
+  }
+
+  if (a.type === 'percent') {
+    const days = WINDOW_DAYS[a.window || '1D'];
+    const pts = await historyWithin(days);
+    if (pts.length < 2 || a.percent == null) return null;
+    const first = pts[0].rate;
+    const change = ((rate - first) / first) * 100;
+    if (Math.abs(change) >= a.percent) {
+      const dir = change >= 0 ? 'hausse' : 'baisse';
+      const sign = change >= 0 ? '+' : '−';
+      const label = a.window === '1W' ? 'cette semaine' : a.window === '1M' ? 'ce mois' : 'aujourd’hui';
+      return a.message || `${dir} de ${sign}${Math.abs(change).toFixed(2)}% ${label} (1 € = ${fmtRate(rate)} ARS).`;
+    }
+    return null;
+  }
+
+  if (a.type === 'extreme') {
+    const days = WINDOW_DAYS[a.window || '1M'];
+    const pts = await historyWithin(days);
+    if (pts.length < 2) return null;
+    const rates = pts.map((p) => p.rate);
+    if (a.extreme === 'high' && rate >= Math.max(...rates)) {
+      return a.message || `Nouveau plus haut sur ${a.window === '1W' ? '7 jours' : '30 jours'} : 1 € = ${fmtRate(rate)} ARS.`;
+    }
+    if (a.extreme === 'low' && rate <= Math.min(...rates)) {
+      return a.message || `Nouveau plus bas sur ${a.window === '1W' ? '7 jours' : '30 jours'} : 1 € = ${fmtRate(rate)} ARS.`;
+    }
+    return null;
+  }
+
+  return null;
+}
+
+async function sendWebPushAlert(a: StoredAlert, body: string): Promise<void> {
+  const payload = JSON.stringify({
+    title: 'PeSAR — Alerte taux',
+    body,
+    tag: 'pesar-alert-' + a.id,
+    url: '/',
+  });
+  try {
+    await webpush.sendNotification(a.subscription as webpush.PushSubscription, payload);
+  } catch (err) {
+    const statusCode = (err as { statusCode?: number }).statusCode;
+    // 404/410 → subscription is dead; clean it up so we stop trying.
+    if (statusCode === 404 || statusCode === 410) {
+      await redis.del(`alert:${a.id}`);
+      await redis.srem('alerts:all', a.id);
+      await redis.srem(`alerts:client:${a.clientId}`, a.id);
+    } else {
+      console.error('[web-push] send failed:', statusCode, err);
+    }
+  }
+}
+
+/** Evaluate every stored alert against the new rate and notify the matching ones. */
+async function processAlerts(rate: number): Promise<void> {
+  if (!VAPID_PUBLIC || !VAPID_PRIVATE) return; // Web Push not configured yet
+  const ids = (await redis.smembers('alerts:all')) as string[];
+  if (!ids.length) return;
+
+  const raw = await redis.mget<Array<string | StoredAlert>>(...ids.map((i) => `alert:${i}`));
+  const now = Date.now();
+
+  for (const item of raw) {
+    if (!item) continue;
+    let a: StoredAlert;
+    try {
+      a = (typeof item === 'string' ? JSON.parse(item) : item) as StoredAlert;
+    } catch {
+      continue;
+    }
+
+    // Cooldown so a satisfied condition doesn't spam every 15 min.
+    if (a.lastTriggeredAt && now - new Date(a.lastTriggeredAt).getTime() < ALERT_COOLDOWN_MS) continue;
+
+    const body = await evaluateAlert(a, rate);
+    if (!body) continue;
+
+    await sendWebPushAlert(a, body);
+    a.lastTriggeredAt = new Date().toISOString();
+    await redis.set(`alert:${a.id}`, JSON.stringify(a));
+  }
+}
+
 export async function GET(req: Request): Promise<Response> {
   // Protect the endpoint with a secret so only the GitHub Action can call it.
   // Set CRON_SECRET in both Vercel dashboard AND GitHub Actions secrets.
@@ -291,7 +439,8 @@ export async function GET(req: Request): Promise<Response> {
     const { rate, timestamp, source } = await fetchRate();
 
     await storeRate(rate, timestamp);
-    await sendSilentPushToAll(rate, timestamp);
+    await sendSilentPushToAll(rate, timestamp);   // Expo (native app)
+    await processAlerts(rate);                     // Web Push (PWA alerts)
 
     return Response.json({ ok: true, rate, timestamp, source });
   } catch (err) {
