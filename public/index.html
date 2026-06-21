@@ -667,14 +667,17 @@
       z-index: 201;
       background: var(--bg);
       border-left: 1px solid var(--card-border);
-      box-shadow: -20px 0 60px rgba(0,0,0,0.4);
       transform: translateX(100%);
-      transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+      transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.32s ease;
       display: flex;
       flex-direction: column;
       overflow: hidden;
     }
-    .panel.open { transform: translateX(0); }
+    /* Shadow only when open — otherwise it bleeds onto the main screen's right edge. */
+    .panel.open {
+      transform: translateX(0);
+      box-shadow: -20px 0 60px rgba(0,0,0,0.4);
+    }
 
     .panel-head {
       display: flex;
@@ -811,16 +814,20 @@
     .wu-hint { font-size: 12px; color: var(--text-muted); text-align: center; }
 
     #wu-map {
-      height: 240px;
+      display: none;            /* shown by JS once the user has located */
+      height: 260px;
       width: 100%;
       background: var(--card);
-      border-top: 1px solid var(--card-border);
-      border-bottom: 1px solid var(--card-border);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      margin-top: 12px;
+      overflow: hidden;
       z-index: 0;
     }
-    .leaflet-container { font-family: inherit; background: var(--bg2); }
+    #wu-map.visible { display: block; }
+    .leaflet-container { font-family: inherit; background: var(--bg2); border-radius: 14px; }
 
-    .wu-results { padding: 8px 12px; }
+    .wu-results { padding: 10px 0 4px; }
     .wu-result-item {
       display: flex;
       align-items: center;
@@ -865,9 +872,27 @@
       font-size: 14px;
     }
     .wu-state .spinner { margin: 0 auto 14px; }
+    .wu-result-item { cursor: pointer; }
+    .wu-result-item.active { border-color: var(--accent); background: var(--btn-active); }
+
+    /* ── All-in-one home page inside the panel ── */
+    .home { padding: 8px 0 4px; }
+    .home.hidden { display: none; }
+    .home-section {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--card-border);
+    }
+    .home-section-title {
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.3px;
+      color: var(--text);
+      margin-bottom: 10px;
+    }
+    .home-install { margin: 12px; width: calc(100% - 24px); }
 
     /* ── Alerts view ── */
-    .alerts-body { padding: 16px; }
+    .alerts-body { padding: 0; }
     .alert-perm {
       text-align: center;
       padding: 20px 8px 24px;
@@ -1117,72 +1142,19 @@
   <div class="panel-overlay" id="panel-overlay"></div>
   <aside class="panel" id="panel" aria-hidden="true">
 
-    <!-- Root menu view -->
+    <!-- Main (all-in-one) view -->
     <div class="panel-head" id="panel-head-root">
-      <span class="panel-title">Menu</span>
+      <span class="panel-title">PeSAR</span>
       <button class="panel-close" id="panel-close" aria-label="Fermer">✕</button>
     </div>
 
     <div class="panel-body">
-      <div class="menu-list" id="menu-list">
-        <button class="menu-item" data-view="wu">
-          <span class="menu-item-icon">📍</span>
-          <span class="menu-item-text">
-            <span class="menu-item-title">Western Union près de moi</span>
-            <span class="menu-item-desc">Trouver les points de retrait autour de toi</span>
-          </span>
-          <span class="menu-item-chevron">›</span>
-        </button>
+      <!-- Everything lives on one scrollable page. Only "Installer l'app" navigates away. -->
+      <div class="home" id="view-home">
 
-        <button class="menu-item" data-view="alerts">
-          <span class="menu-item-icon">🔔</span>
-          <span class="menu-item-text">
-            <span class="menu-item-title">Alertes de taux</span>
-            <span class="menu-item-desc">Être notifié selon des conditions de prix</span>
-          </span>
-          <span class="menu-item-chevron">›</span>
-        </button>
-
-        <button class="menu-item" data-view="install">
-          <span class="menu-item-icon">📲</span>
-          <span class="menu-item-text">
-            <span class="menu-item-title">Installer l’app</span>
-            <span class="menu-item-desc">Ajouter PeSAR à l’écran d’accueil</span>
-          </span>
-          <span class="menu-item-chevron">›</span>
-        </button>
-      </div>
-
-      <!-- Western Union sub-view -->
-      <div class="subview" id="view-wu">
-        <div class="panel-head">
-          <button class="panel-back" data-back>‹ Retour</button>
-          <button class="panel-close" data-close aria-label="Fermer">✕</button>
-        </div>
-
-        <div class="wu-toolbar">
-          <button class="wu-locate-btn" id="wu-locate">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="3"/>
-              <path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
-            </svg>
-            Activer ma localisation
-          </button>
-          <div class="wu-hint" id="wu-hint">Active ta position pour voir les Western Union autour de toi.</div>
-        </div>
-
-        <div id="wu-map"></div>
-
-        <div class="wu-results" id="wu-results"></div>
-      </div>
-
-      <!-- Alerts sub-view -->
-      <div class="subview" id="view-alerts">
-        <div class="panel-head">
-          <button class="panel-back" data-back>‹ Retour</button>
-          <button class="panel-close" data-close aria-label="Fermer">✕</button>
-        </div>
-
+        <!-- Section: Alerts -->
+        <section class="home-section">
+          <h3 class="home-section-title">🔔 Alertes de taux</h3>
         <div class="alerts-body">
           <!-- Permission gate -->
           <div id="alert-permission" class="alert-perm">
@@ -1263,6 +1235,38 @@
           <div class="alert-list-head" id="alert-list-head" hidden>Mes alertes</div>
           <div id="alert-list" class="alert-list"></div>
         </div>
+        </section>
+
+        <!-- Section: Western Union -->
+        <section class="home-section">
+          <h3 class="home-section-title">📍 Western Union près de moi</h3>
+
+          <div class="wu-toolbar">
+            <button class="wu-locate-btn" id="wu-locate">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
+              </svg>
+              Activer ma localisation
+            </button>
+            <div class="wu-hint" id="wu-hint">Active ta position pour voir les Western Union autour de toi.</div>
+          </div>
+
+          <div id="wu-map"></div>
+
+          <div class="wu-results" id="wu-results"></div>
+        </section>
+
+        <!-- Link to the install page -->
+        <button class="menu-item home-install" data-view="install">
+          <span class="menu-item-icon">📲</span>
+          <span class="menu-item-text">
+            <span class="menu-item-title">Installer l’app</span>
+            <span class="menu-item-desc">Ajouter PeSAR à l’écran d’accueil</span>
+          </span>
+          <span class="menu-item-chevron">›</span>
+        </button>
+
       </div>
 
       <!-- Install (PWA) sub-view -->
@@ -1902,13 +1906,13 @@
     const menuBtn   = document.getElementById('menu-btn');
     const overlay   = document.getElementById('panel-overlay');
     const panel     = document.getElementById('panel');
-    const menuList  = document.getElementById('menu-list');
     const headRoot  = document.getElementById('panel-head-root');
-    const viewWu    = document.getElementById('view-wu');
     const locateBtn = document.getElementById('wu-locate');
     const wuHint    = document.getElementById('wu-hint');
     const wuResults = document.getElementById('wu-results');
     const mapEl     = document.getElementById('wu-map');
+    const viewHome    = document.getElementById('view-home');
+    const viewInstall = document.getElementById('view-install');
 
     /* ── Panel open/close ── */
     function openPanel() {
@@ -1916,6 +1920,10 @@
       panel.classList.add('open');
       panel.setAttribute('aria-hidden', 'false');
       document.body.style.overflow = 'hidden';
+      showRoot();                              // always land on the all-in-one page
+      if (window.PeSARAlerts) window.PeSARAlerts.open();
+      // The map needs a recalculation once the panel is on-screen.
+      if (map) setTimeout(() => map.invalidateSize(), 350);
     }
     function closePanel() {
       overlay.classList.remove('open');
@@ -1923,30 +1931,18 @@
       panel.setAttribute('aria-hidden', 'true');
       document.body.style.overflow = '';
     }
-    const viewAlerts  = document.getElementById('view-alerts');
-    const viewInstall = document.getElementById('view-install');
     function anySubviewOpen() {
-      return viewWu.classList.contains('active') ||
-             viewAlerts.classList.contains('active') ||
-             viewInstall.classList.contains('active');
+      return viewInstall.classList.contains('active');
     }
     function showRoot() {
-      viewWu.classList.remove('active');
-      viewAlerts.classList.remove('active');
       viewInstall.classList.remove('active');
-      menuList.classList.remove('hidden');
+      viewHome.classList.remove('hidden');
       headRoot.style.display = '';
     }
     function showView(id) {
-      menuList.classList.add('hidden');
-      headRoot.style.display = 'none';
-      if (id === 'wu') {
-        viewWu.classList.add('active');
-        ensureWuLoaded();
-      } else if (id === 'alerts') {
-        viewAlerts.classList.add('active');
-        if (window.PeSARAlerts) window.PeSARAlerts.open();
-      } else if (id === 'install') {
+      if (id === 'install') {
+        viewHome.classList.add('hidden');
+        headRoot.style.display = 'none';
         viewInstall.classList.add('active');
         renderInstallGuide();
       }
@@ -2072,15 +2068,7 @@
     let map = null;
     let userMarker = null;
     let resultLayer = null;
-    let wuInitialized = false;
-
-    function ensureWuLoaded() {
-      // Map is only built after the user grants location (needs a center).
-      if (!wuInitialized) {
-        wuInitialized = true;
-        // nothing eager here — wait for locate click
-      }
-    }
+    let resultMarkers = [];   // parallel to the rendered list, for click-to-focus
 
     /* Haversine distance in metres */
     function distM(lat1, lon1, lat2, lon2) {
@@ -2147,6 +2135,9 @@
         try {
           await loadLeaflet();
 
+          // The map container must be visible & sized before Leaflet initializes.
+          mapEl.classList.add('visible');
+
           if (!map) {
             map = L.map(mapEl, { zoomControl: true, attributionControl: true })
                    .setView([lat, lon], 14);
@@ -2163,7 +2154,8 @@
           if (userMarker) userMarker.remove();
           userMarker = L.circleMarker([lat, lon], {
             radius: 8, color: '#2979ff', fillColor: '#2979ff', fillOpacity: 0.9, weight: 2,
-          }).addTo(map).bindPopup('Tu es ici');
+          }).addTo(map).bindPopup('📍 Tu es ici');
+          userMarker.openPopup();
 
           // Auto-widen the radius if nothing is found nearby (useful outside Buenos Aires).
           let elements = [];
@@ -2219,30 +2211,63 @@
         className: '', iconSize: [26, 26], iconAnchor: [13, 26], popupAnchor: [0, -24],
       });
 
+      resultMarkers = [];
+      const rows = [];
       const frag = document.createDocumentFragment();
-      items.forEach(it => {
-        L.marker([it.lat, it.lon], { icon: wuIcon })
-          .addTo(resultLayer)
-          .bindPopup('<b>' + it.name + '</b>' + (it.addr ? '<br>' + it.addr : ''));
+      const bounds = [[lat, lon]];
 
-        const a = document.createElement('a');
-        a.className = 'wu-result-item';
-        a.href = `https://www.openstreetmap.org/?mlat=${it.lat}&mlon=${it.lon}#map=18/${it.lat}/${it.lon}`;
-        a.target = '_blank';
-        a.rel = 'noopener';
-        a.innerHTML =
+      items.forEach((it, i) => {
+        // "Itinéraire" link inside the popup keeps navigation optional — the row itself stays in-app.
+        const dirUrl = `https://www.google.com/maps/dir/?api=1&destination=${it.lat},${it.lon}`;
+        const popupHtml =
+          '<b>' + escapeHtml(it.name) + '</b>' +
+          (it.addr ? '<br>' + escapeHtml(it.addr) : '') +
+          '<br><a href="' + dirUrl + '" target="_blank" rel="noopener">Itinéraire ↗</a>';
+        const marker = L.marker([it.lat, it.lon], { icon: wuIcon })
+          .addTo(resultLayer)
+          .bindPopup(popupHtml);
+        resultMarkers.push(marker);
+        bounds.push([it.lat, it.lon]);
+
+        const row = document.createElement('div');
+        row.className = 'wu-result-item';
+        row.innerHTML =
           '<div class="wu-result-pin">💸</div>' +
           '<div class="wu-result-info">' +
             '<div class="wu-result-name"></div>' +
             '<div class="wu-result-addr"></div>' +
           '</div>' +
           '<div class="wu-result-dist">' + fmtDist(it.dist) + '</div>';
-        a.querySelector('.wu-result-name').textContent = it.name;
-        a.querySelector('.wu-result-addr').textContent = it.addr || 'Adresse non renseignée';
-        frag.appendChild(a);
+        row.querySelector('.wu-result-name').textContent = it.name;
+        row.querySelector('.wu-result-addr').textContent = it.addr || 'Adresse non renseignée';
+        row.addEventListener('click', () => focusMarker(i));
+        rows.push(row);
+        frag.appendChild(row);
       });
+
       wuResults.innerHTML = '';
       wuResults.appendChild(frag);
+
+      // Show a bit of context: nearest few points + the user.
+      try {
+        const near = bounds.slice(0, Math.min(bounds.length, 8));
+        map.fitBounds(near, { padding: [30, 30], maxZoom: 15 });
+      } catch {}
+      setTimeout(() => map.invalidateSize(), 80);
+
+      // Clicking a row highlights it and focuses its marker.
+      function focusMarker(i) {
+        rows.forEach((r, j) => r.classList.toggle('active', j === i));
+        const m = resultMarkers[i];
+        if (!m) return;
+        map.panTo(m.getLatLng());
+        m.openPopup();
+      }
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     }
 
     locateBtn.addEventListener('click', locate);
