@@ -97,6 +97,10 @@
 
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
+    /* The [hidden] attribute must always win — otherwise a `display: flex/grid`
+       rule on the same element silently re-shows it (e.g. alert condition blocks). */
+    [hidden] { display: none !important; }
+
     html { scroll-behavior: smooth; }
 
     /* ── Hide scrollbar everywhere, keep scroll functional ── */
