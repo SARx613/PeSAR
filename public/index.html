@@ -2100,33 +2100,25 @@
     function resultsState(html) { wuResults.innerHTML = '<div class="wu-state">' + html + '</div>'; }
 
     /* ── Query Overpass for nearby Western Union ── */
+    /* Western Union dataset (all of Argentina, pre-fetched from OSM).
+       Loaded once and cached — no live Overpass call, so it's instant & reliable. */
+    let wuDataset = null;
+    let wuDatasetLoading = null;
+    function loadWuDataset() {
+      if (wuDataset) return Promise.resolve(wuDataset);
+      if (wuDatasetLoading) return wuDatasetLoading;
+      wuDatasetLoading = fetch('/wu-argentina.json', { cache: 'no-cache' })
+        .then(r => { if (!r.ok) throw new Error('dataset HTTP ' + r.status); return r.json(); })
+        .then(d => { wuDataset = Array.isArray(d) ? d : (d.points || []); return wuDataset; });
+      return wuDatasetLoading;
+    }
+
+    // Returns the points within `radius` metres of (lat, lon), shaped like before.
     async function fetchWesternUnion(lat, lon, radius = 8000) {
-      // Match by name (WU branding) OR money_transfer amenities tagged as WU.
-      const q = `[out:json][timeout:25];
-        (
-          node["name"~"Western Union",i](around:${radius},${lat},${lon});
-          node["brand"~"Western Union",i](around:${radius},${lat},${lon});
-          node["money_transfer"="western_union"](around:${radius},${lat},${lon});
-        );
-        out body 60;`;
-      const endpoints = [
-        'https://overpass-api.de/api/interpreter',
-        'https://overpass.kumi.systems/api/interpreter',
-      ];
-      let lastErr;
-      for (const url of endpoints) {
-        try {
-          const res = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
-            body: q,
-          });
-          if (!res.ok) throw new Error('HTTP ' + res.status);
-          const data = await res.json();
-          return data.elements || [];
-        } catch (e) { lastErr = e; }
-      }
-      throw lastErr || new Error('Overpass indisponible');
+      const all = await loadWuDataset();
+      return all
+        .filter(p => distM(lat, lon, p.lat, p.lon) <= radius)
+        .map(p => ({ lat: p.lat, lon: p.lon, tags: p.tags || { name: p.name } }));
     }
 
     function addrOf(tags) {
@@ -2173,8 +2165,15 @@
             radius: 8, color: '#2979ff', fillColor: '#2979ff', fillOpacity: 0.9, weight: 2,
           }).addTo(map).bindPopup('Tu es ici');
 
-          const elements = await fetchWesternUnion(lat, lon);
-          renderResults(elements, lat, lon);
+          // Auto-widen the radius if nothing is found nearby (useful outside Buenos Aires).
+          let elements = [];
+          let usedRadius = 8000;
+          for (const r of [8000, 20000, 50000]) {
+            usedRadius = r;
+            elements = await fetchWesternUnion(lat, lon, r);
+            if (elements.length) break;
+          }
+          renderResults(elements, lat, lon, usedRadius);
         } catch (err) {
           console.error(err);
           setHint('Impossible de charger la carte ou les résultats.');
@@ -2192,7 +2191,7 @@
       }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
     }
 
-    function renderResults(elements, lat, lon) {
+    function renderResults(elements, lat, lon, usedRadius = 8000) {
       resultLayer.clearLayers();
 
       const items = elements
@@ -2207,12 +2206,13 @@
         .slice(0, 30);
 
       if (!items.length) {
-        setHint('Aucun Western Union trouvé dans un rayon de 8 km.');
-        resultsState('Aucun point Western Union trouvé près de toi.<br>La couverture OpenStreetMap est parfois incomplète.');
+        setHint('Aucun Western Union trouvé dans un rayon de 50 km.');
+        resultsState('Aucun point Western Union trouvé près de toi.<br>La base OpenStreetMap est parfois incomplète dans certaines zones.');
         return;
       }
 
-      setHint(items.length + ' point(s) Western Union trouvé(s) — trié(s) par distance.');
+      const km = Math.round(usedRadius / 1000);
+      setHint(items.length + ' point(s) trouvé(s) dans un rayon de ' + km + ' km — trié(s) par distance.');
 
       const wuIcon = L.divIcon({
         html: '<div style="background:#ffc107;width:26px;height:26px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,0.4)"><span style="transform:rotate(45deg);font-size:13px">💸</span></div>',
