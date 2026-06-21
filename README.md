@@ -5,7 +5,11 @@ Il comprend :
 
 - Une **app mobile Expo / React Native** (avec `expo-router`)
 - Un **backend serverless Vercel** (`/api/*`) qui scrape, stocke l’historique dans Redis et sert les endpoints
-- Une **landing page** (`/`) avec **graphique**, sélection de période (1J/1S/1M/3M/6M/1A), mode jour/nuit automatique
+- Une **PWA** (`public/index.html`) installable sur l’écran d’accueil, avec **graphique**, sélection de période (1J/1S/1M/3M/6M/1A), **convertisseur** EUR ⇄ ARS et mode jour/nuit automatique
+- Un **menu** (bouton ☰) qui regroupe les fonctionnalités sans alourdir l’écran d’accueil :
+  - **Western Union près de moi** : carte (OpenStreetMap / Leaflet) + liste triée par distance des points de retrait, à partir d’un jeu de données embarqué
+  - **Alertes de taux** : notifications **Web Push** déclenchées par des conditions (seuil de prix, variation %, plus haut/bas), même app fermée
+  - **Installer l’app** : guide d’installation PWA adapté à l’appareil (iPhone/Safari, Android/Chrome, desktop)
 - Une **documentation** accessible via `**/docs`**
 
 ## Fonctionnement global
@@ -19,9 +23,30 @@ Il comprend :
   - `rate_history` (historique roulant, ~3 mois à intervalle 15 min)
 - Les pages web (`/` et `/docs`) consomment `GET /api/latest-rate` et `GET /api/rate-history`
 
+## Localisateur Western Union
+
+Le menu propose une recherche des points Western Union autour de l’utilisateur (géolocalisation du navigateur + carte Leaflet / tuiles OpenStreetMap).
+
+Pour des raisons de **fiabilité et de rapidité**, l’app **n’interroge pas Overpass en direct** (l’API publique Overpass est souvent lente/surchargée, ce qui faisait « tourner » la recherche sans résultat). À la place, elle charge un **jeu de données embarqué** :
+
+- `public/wu-argentina.json` — tous les points Western Union d’Argentine connus d’OpenStreetMap (coordonnées + nom + adresse si disponible).
+- La recherche est **instantanée**, fonctionne **hors-ligne**, et **élargit automatiquement** le rayon (8 → 20 → 50 km) si rien n’est trouvé à proximité.
+
+Le fichier reflète la couverture OSM : bonne à Buenos Aires, plus partielle ailleurs. Pour le régénérer, voir [`scripts/update-wu-dataset.mjs`](scripts/update-wu-dataset.mjs) (`npm run update:wu`).
+
+## Alertes de taux (Web Push)
+
+L’utilisateur peut créer des alertes notifiées par **Web Push** (standard VAPID + service worker `public/sw.js`), reçues **même app fermée**.
+
+- **Types de conditions** : seuil de prix (1 € dépasse / descend sous X ARS), variation en % (sur jour / semaine / mois), nouveau plus haut / plus bas (sur 7 ou 30 j), avec message personnalisé optionnel.
+- **Stockage** : abonnements + conditions dans Upstash Redis (`alerts:all`, `alerts:client:<id>`, `alert:<id>`).
+- **Évaluation** : à chaque exécution du cron `GET /api/scrape-rate`, les alertes sont évaluées contre le nouveau taux ; celles satisfaites déclenchent un push (cooldown de 6 h par alerte pour éviter le spam).
+
+> **iOS** : les notifications Web Push nécessitent que la PWA soit **ajoutée à l’écran d’accueil** (iOS 16.4+) et lancée depuis son icône. D’où le guide « Installer l’app » dans le menu.
+
 ## Pages
 
-- `**/`**: dashboard (taux en grand + graphique + boutons de période + % vert/rouge)
+- `**/`**: dashboard (taux en grand + convertisseur + graphique + boutons de période + % vert/rouge) + menu (☰)
 - `**/docs**`: documentation API (rewrite vers `public/docs.html`)
 
 ## Design (palette + mini-maquette)
@@ -97,11 +122,23 @@ Réponse (exemple) :
 
 ### `POST /api/register-token`
 
-Enregistre un token Expo Push Notifications (utilisé pour envoyer des mises à jour silencieuses).
+Enregistre un token Expo Push Notifications (utilisé pour envoyer des mises à jour silencieuses à l’app native).
+
+### `GET /api/vapid-public-key`
+
+Retourne la clé publique VAPID pour que le navigateur (PWA) puisse s’abonner au Web Push.
+
+### `POST /api/alerts`
+
+Gère les alertes de taux Web Push. Le corps de la requête porte un champ `action` :
+
+- `create` — `{ action, clientId, subscription, alert }` : crée une alerte
+- `list` — `{ action, clientId }` : liste les alertes d’un appareil
+- `delete` — `{ action, clientId, id }` : supprime une alerte
 
 ### `GET /api/scrape-rate` 🔒
 
-Déclenche le scraping, stocke le nouveau point et (optionnellement) notifie les appareils enregistrés.  
+Déclenche le scraping, stocke le nouveau point, notifie l’app native (Expo) et évalue les **alertes Web Push** de la PWA.  
 Protégé par :
 
 ```
@@ -117,6 +154,7 @@ Voir `.env.example` pour la liste complète.
 - `UPSTASH_REDIS_REST_URL`
 - `UPSTASH_REDIS_REST_TOKEN`
 - `CRON_SECRET` (doit matcher le secret GitHub Actions)
+- `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` — pour les alertes Web Push de la PWA (générer une paire avec `npx web-push generate-vapid-keys`). Sans ces clés, les alertes restent silencieuses.
 
 ### Côté app (Expo)
 
@@ -147,7 +185,13 @@ Backend :
 - **API**: fonctions serverless dans `api/`
 - **Cron**: GitHub Actions appelle `GET /api/scrape-rate` toutes les 15 minutes (voir `.github/workflows/`)
 
+## Scripts utilitaires
+
+- `npm run update:wu` — régénère `public/wu-argentina.json` en récupérant les points Western Union d’Argentine depuis OpenStreetMap (Overpass). À relancer de temps en temps pour rafraîchir les données ; le script refuse d’écraser le fichier si la récupération échoue. Voir [`scripts/update-wu-dataset.mjs`](scripts/update-wu-dataset.mjs).
+
 ## Notes importantes
 
 - Le taux affiché dépend de la source (WU en priorité, sinon `dolarapi`).
 - L’historique “long” (1M/3M/6M/1A) devient pertinent après accumulation des points (scrapes réguliers).
+- Le localisateur Western Union reflète la couverture **OpenStreetMap** (incomplète par endroits) — ce n’est pas une liste officielle exhaustive de Western Union.
+- Les alertes Web Push sur **iOS** exigent une PWA installée sur l’écran d’accueil (iOS 16.4+).
